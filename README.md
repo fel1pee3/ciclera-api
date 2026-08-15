@@ -75,7 +75,7 @@ A API não é responsável por:
 
 - Node.js `22.21.1`, fixado em `.nvmrc` e aceito na faixa `22.x` por `engines`.
 - npm `10.9.4`, definido em `packageManager` e aceito na faixa `10.x` por `engines`.
-- PostgreSQL na versão suportada pelo projeto.
+- PostgreSQL `17.10` para o ambiente local, executado pela imagem oficial `postgres:17.10-alpine`.
 - Object storage compatível quando o fluxo de evidências estiver habilitado.
 
 Docker pode ser utilizado para dependências locais, mas a aplicação não deve depender de Docker para ser testável ou compilável.
@@ -86,6 +86,10 @@ Na pasta `ciclera-api`:
 
 ```bash
 npm ci
+cp .env.example .env
+docker compose up -d --wait postgres
+npm run db:check
+npm run db:check:test
 npm run start:dev
 ```
 
@@ -98,6 +102,56 @@ API: http://localhost:3333
 OpenAPI: http://localhost:3333/docs
 ```
 
+## PostgreSQL local
+
+O PostgreSQL local pertence à infraestrutura da API e está definido em `compose.yaml`. A porta é publicada somente em `127.0.0.1`, as credenciais ficam no `.env` ignorado pelo Git e os dados persistem no volume nomeado `ciclera-api-postgres-data`.
+
+Por padrão, a porta `5432` do container é publicada como `55432` no host para evitar conflitos com instalações locais. Se `POSTGRES_PORT` for alterada, atualize também `DATABASE_URL` e `TEST_DATABASE_URL` no `.env`.
+
+O container cria dois bancos distintos na primeira inicialização do volume:
+
+- `ciclera_dev`: desenvolvimento local, acessado por `DATABASE_URL`.
+- `ciclera_test`: testes automatizados futuros, acessado por `TEST_DATABASE_URL`.
+
+Antes de iniciar, copie `.env.example` para `.env` e substitua a senha fictícia nas três ocorrências: `POSTGRES_PASSWORD`, `DATABASE_URL` e `TEST_DATABASE_URL`.
+
+Validar a configuração e iniciar somente o PostgreSQL:
+
+```bash
+docker compose config
+docker compose up -d --wait postgres
+docker compose ps
+```
+
+Confirmar pela aplicação Node.js que os dois bancos aceitam conexão:
+
+```bash
+npm run db:check
+npm run db:check:test
+```
+
+Parar e iniciar novamente, preservando container e volume:
+
+```bash
+docker compose stop postgres
+docker compose start postgres
+```
+
+Remover o container e a rede, preservando os dados:
+
+```bash
+docker compose down
+```
+
+Recriar somente a infraestrutura local do banco, apagando os dados de desenvolvimento e teste:
+
+```bash
+docker compose down --volumes
+docker compose up -d --wait postgres
+```
+
+> `docker compose down --volumes` é destrutivo para os dois bancos locais. Não utilize esse comando se houver dados locais que precisem ser preservados.
+
 ## Scripts esperados
 
 | Comando | Responsabilidade |
@@ -107,6 +161,8 @@ OpenAPI: http://localhost:3333/docs
 | `npm run start:prod` | Executar o build de produção |
 | `npm run lint` | Executar lint |
 | `npm run typecheck` | Validar tipos sem gerar build |
+| `npm run db:check` | Validar a conexão Node.js com o banco de desenvolvimento |
+| `npm run db:check:test` | Validar a conexão Node.js com o banco de testes separado |
 | `npm test` | Executar testes unitários |
 | `npm run test:watch` | Executar testes em modo interativo |
 | `npm run test:e2e` | Executar o teste HTTP end-to-end do scaffold |
@@ -119,13 +175,21 @@ Não documentar scripts inexistentes indefinidamente. Criá-los ou atualizar a t
 
 Manter um `.env.example` versionado e uma validação executada antes da aplicação iniciar.
 
+No CP-02, somente as variáveis da infraestrutura PostgreSQL presentes em `.env.example` estão ativas. As variáveis de aplicação, autenticação, storage e e-mail documentadas adiante serão introduzidas apenas nos checkpoints correspondentes.
+
 ### Aplicação e banco
 
 | Variável | Obrigatória | Finalidade |
 | --- | ---: | --- |
+| `POSTGRES_USER` | Local | Usuário exclusivamente local criado pelo container |
+| `POSTGRES_PASSWORD` | Local | Senha exclusivamente local, definida apenas no `.env` |
+| `POSTGRES_DB` | Local | Nome do banco de desenvolvimento |
+| `POSTGRES_TEST_DB` | Local | Nome distinto do banco de testes |
+| `POSTGRES_PORT` | Local | Porta publicada somente em loopback |
 | `NODE_ENV` | Sim | Ambiente de execução |
 | `PORT` | Não | Porta HTTP; padrão planejado `3333` |
-| `DATABASE_URL` | Sim | Conexão utilizada pela aplicação e Prisma |
+| `DATABASE_URL` | Sim | Conexão local com o banco de desenvolvimento |
+| `TEST_DATABASE_URL` | Testes | Conexão local com o banco de testes separado |
 | `DIRECT_DATABASE_URL` | Conforme infraestrutura | Conexão direta para migrations quando houver pooler |
 | `WEB_URL` | Sim | URL principal do frontend |
 | `CORS_ORIGINS` | Sim | Lista explícita de origens permitidas |
@@ -163,36 +227,17 @@ Manter um `.env.example` versionado e uma validação executada antes da aplica�
 | `EMAIL_FROM` | Ao habilitar e-mails | Remetente transacional |
 | `EMAIL_REPLY_TO` | Não | Endereço para respostas |
 
-Exemplo seguro e incompleto por intenção:
+Exemplo seguro implementado no CP-02:
 
 ```env
-NODE_ENV="development"
-PORT="3333"
-DATABASE_URL="postgresql://user:password@localhost:5432/ciclera"
-DIRECT_DATABASE_URL="postgresql://user:password@localhost:5432/ciclera"
-WEB_URL="http://localhost:3000"
-CORS_ORIGINS="http://localhost:3000"
-LOG_LEVEL="debug"
+POSTGRES_USER=ciclera_local
+POSTGRES_PASSWORD=replace-with-a-local-only-password
+POSTGRES_DB=ciclera_dev
+POSTGRES_TEST_DB=ciclera_test
+POSTGRES_PORT=55432
 
-JWT_ACCESS_SECRET="replace-with-a-long-random-secret"
-ACCESS_TOKEN_TTL="15m"
-REFRESH_TOKEN_TTL="30d"
-COOKIE_DOMAIN=""
-COOKIE_SECURE="false"
-PASSWORD_RESET_TTL="30m"
-
-STORAGE_ENDPOINT=""
-STORAGE_REGION=""
-STORAGE_BUCKET=""
-STORAGE_ACCESS_KEY_ID=""
-STORAGE_SECRET_ACCESS_KEY=""
-STORAGE_FORCE_PATH_STYLE="false"
-UPLOAD_MAX_FILE_SIZE_BYTES="10485760"
-UPLOAD_ALLOWED_MIME_TYPES="image/jpeg,image/png,image/webp,application/pdf"
-
-EMAIL_PROVIDER_API_KEY=""
-EMAIL_FROM=""
-EMAIL_REPLY_TO=""
+DATABASE_URL=postgresql://ciclera_local:replace-with-a-local-only-password@localhost:55432/ciclera_dev
+TEST_DATABASE_URL=postgresql://ciclera_local:replace-with-a-local-only-password@localhost:55432/ciclera_test
 ```
 
 Regras:
