@@ -73,8 +73,8 @@ A API não é responsável por:
 
 ## Requisitos locais
 
-- Node.js na versão definida pelo projeto.
-- pnpm na versão definida pelo projeto.
+- Node.js `22.21.1`, fixado em `.nvmrc` e aceito na faixa `22.x` por `engines`.
+- npm `10.9.4`, definido em `packageManager` e aceito na faixa `10.x` por `engines`.
 - PostgreSQL na versão suportada pelo projeto.
 - Object storage compatível quando o fluxo de evidências estiver habilitado.
 
@@ -85,12 +85,8 @@ Docker pode ser utilizado para dependências locais, mas a aplicação não deve
 Na pasta `ciclera-api`:
 
 ```bash
-pnpm install
-cp .env.example .env
-pnpm prisma generate
-pnpm prisma migrate dev
-pnpm prisma db seed
-pnpm start:dev
+npm ci
+npm run start:dev
 ```
 
 Os comandos acima devem existir no `package.json` ou ser ajustados neste README para refletir os scripts reais.
@@ -106,20 +102,16 @@ OpenAPI: http://localhost:3333/docs
 
 | Comando | Responsabilidade |
 | --- | --- |
-| `pnpm start:dev` | Iniciar a API com reload em desenvolvimento |
-| `pnpm build` | Compilar a aplicação |
-| `pnpm start:prod` | Executar o build de produção |
-| `pnpm lint` | Executar lint |
-| `pnpm typecheck` | Validar tipos sem gerar build |
-| `pnpm test` | Executar testes unitários |
-| `pnpm test:watch` | Executar testes em modo interativo |
-| `pnpm test:integration` | Executar testes com infraestrutura real isolada |
-| `pnpm test:e2e` | Executar testes HTTP end-to-end |
-| `pnpm prisma:generate` | Gerar Prisma Client |
-| `pnpm prisma:validate` | Validar o schema Prisma |
-| `pnpm prisma:migrate:dev` | Criar e aplicar migration local |
-| `pnpm prisma:migrate:deploy` | Aplicar migrations já versionadas em produção |
-| `pnpm prisma:seed` | Criar dados determinísticos de desenvolvimento |
+| `npm run start:dev` | Iniciar a API com reload em desenvolvimento |
+| `npm run build` | Compilar a aplicação |
+| `npm run start:prod` | Executar o build de produção |
+| `npm run lint` | Executar lint |
+| `npm run typecheck` | Validar tipos sem gerar build |
+| `npm test` | Executar testes unitários |
+| `npm run test:watch` | Executar testes em modo interativo |
+| `npm run test:e2e` | Executar o teste HTTP end-to-end do scaffold |
+| `npm run format` | Formatar os arquivos TypeScript |
+| `npm run format:check` | Verificar a formatação sem alterar arquivos |
 
 Não documentar scripts inexistentes indefinidamente. Criá-los ou atualizar a tabela quando a configuração real for estabelecida.
 
@@ -1540,18 +1532,16 @@ A API está pronta para piloto quando:
 ## Checklist antes de pull request
 
 ```bash
-pnpm lint
-pnpm typecheck
-pnpm prisma:validate
-pnpm test
-pnpm test:integration
-pnpm build
+npm run lint
+npm run typecheck
+npm test
+npm run build
 ```
 
 Quando a mudança afetar fluxo HTTP crítico:
 
 ```bash
-pnpm test:e2e
+npm run test:e2e
 ```
 
 Confirmar também:
