@@ -100,7 +100,25 @@ Quando mantidas as portas planejadas para desenvolvimento:
 ```text
 API: http://localhost:3333
 OpenAPI: http://localhost:3333/docs
+Liveness: http://localhost:3333/health/live
+Readiness: http://localhost:3333/health/ready
 ```
+
+O OpenAPI é montado em `/docs` somente com `NODE_ENV=development`. Em `test` e `production`, `/docs` e `/docs-json` não são registrados.
+
+## Fundação HTTP
+
+- Rotas da API utilizam o prefixo global `/api/v1`.
+- `/health/live` e `/health/ready` permanecem deliberadamente fora do prefixo.
+- A porta padrão é `3333` e pode ser alterada por `PORT`.
+- Variáveis de ambiente são validadas e tipadas antes do bootstrap; configuração obrigatória ausente ou inválida interrompe a inicialização sem imprimir seu valor.
+- O `ValidationPipe` global remove propriedades sem decorators e rejeita campos inesperados com `422`.
+- CORS aceita somente as origens de `CORS_ORIGINS`, permite credenciais e não concede headers CORS a origens recusadas.
+- O corpo JSON e URL-encoded possui limite padrão de `100kb`, configurável por `HTTP_BODY_LIMIT`.
+- Headers básicos de segurança são aplicados pelo Helmet.
+- Toda requisição recebe `x-request-id`; um valor enviado pelo cliente só é preservado após validação de formato e tamanho.
+- Logs são JSON estruturado e não registram headers, body ou query string. Chaves sensíveis, URLs do PostgreSQL e URLs assinadas são redigidas.
+- O encerramento gracioso fecha o pool usado pelo readiness e os hooks do NestJS.
 
 ## PostgreSQL local
 
@@ -165,7 +183,7 @@ docker compose up -d --wait postgres
 | `npm run db:check:test` | Validar a conexão Node.js com o banco de testes separado |
 | `npm test` | Executar testes unitários |
 | `npm run test:watch` | Executar testes em modo interativo |
-| `npm run test:e2e` | Executar o teste HTTP end-to-end do scaffold |
+| `npm run test:e2e` | Executar os testes HTTP end-to-end da fundação da API |
 | `npm run format` | Formatar os arquivos TypeScript |
 | `npm run format:check` | Verificar a formatação sem alterar arquivos |
 
@@ -175,7 +193,7 @@ Não documentar scripts inexistentes indefinidamente. Criá-los ou atualizar a t
 
 Manter um `.env.example` versionado e uma validação executada antes da aplicação iniciar.
 
-No CP-02, somente as variáveis da infraestrutura PostgreSQL presentes em `.env.example` estão ativas. As variáveis de aplicação, autenticação, storage e e-mail documentadas adiante serão introduzidas apenas nos checkpoints correspondentes.
+No CP-03, as variáveis da fundação HTTP e da infraestrutura PostgreSQL presentes em `.env.example` estão ativas. Variáveis de autenticação, storage, e-mail e Prisma documentadas adiante continuam reservadas aos checkpoints correspondentes.
 
 ### Aplicação e banco
 
@@ -187,13 +205,14 @@ No CP-02, somente as variáveis da infraestrutura PostgreSQL presentes em `.env.
 | `POSTGRES_TEST_DB` | Local | Nome distinto do banco de testes |
 | `POSTGRES_PORT` | Local | Porta publicada somente em loopback |
 | `NODE_ENV` | Sim | Ambiente de execução |
-| `PORT` | Não | Porta HTTP; padrão planejado `3333` |
+| `PORT` | Não | Porta HTTP; padrão `3333` |
 | `DATABASE_URL` | Sim | Conexão local com o banco de desenvolvimento |
-| `TEST_DATABASE_URL` | Testes | Conexão local com o banco de testes separado |
+| `TEST_DATABASE_URL` | Em `test` | Conexão com o banco de testes separado e usada pelo readiness durante testes |
 | `DIRECT_DATABASE_URL` | Conforme infraestrutura | Conexão direta para migrations quando houver pooler |
-| `WEB_URL` | Sim | URL principal do frontend |
-| `CORS_ORIGINS` | Sim | Lista explícita de origens permitidas |
-| `LOG_LEVEL` | Não | Nível de logs estruturados |
+| `WEB_URL` | Em produção | URL principal do frontend; padrão local `http://localhost:3000` em desenvolvimento e testes |
+| `CORS_ORIGINS` | Em produção | Origens HTTP(S) explícitas, separadas por vírgula; usa `WEB_URL` localmente quando omitida |
+| `HTTP_BODY_LIMIT` | Não | Limite dos corpos JSON e URL-encoded; padrão `100kb` |
+| `LOG_LEVEL` | Não | `debug`, `info`, `warn` ou `error`; padrão `info` |
 
 ### Autenticação
 
@@ -227,9 +246,16 @@ No CP-02, somente as variáveis da infraestrutura PostgreSQL presentes em `.env.
 | `EMAIL_FROM` | Ao habilitar e-mails | Remetente transacional |
 | `EMAIL_REPLY_TO` | Não | Endereço para respostas |
 
-Exemplo seguro implementado no CP-02:
+Exemplo seguro implementado até o CP-03:
 
 ```env
+NODE_ENV=development
+PORT=3333
+WEB_URL=http://localhost:3000
+CORS_ORIGINS=http://localhost:3000
+HTTP_BODY_LIMIT=100kb
+LOG_LEVEL=info
+
 POSTGRES_USER=ciclera_local
 POSTGRES_PASSWORD=replace-with-a-local-only-password
 POSTGRES_DB=ciclera_dev
@@ -1255,15 +1281,16 @@ Erros esperados de domínio não devem poluir logs como falhas internas. Erros i
 
 ## Health checks
 
-Endpoints planejados:
+Endpoints implementados:
 
 ```text
 GET /health/live
 GET /health/ready
 ```
 
-- Liveness confirma que o processo responde.
-- Readiness confirma que dependências essenciais, como PostgreSQL, estão acessíveis.
+- Liveness retorna `200` com `{"status":"ok"}` sem consultar dependências pesadas.
+- Readiness executa uma consulta mínima no PostgreSQL e retorna `200` com o estado do banco ou `503` no formato centralizado de erro.
+- Em `NODE_ENV=test`, readiness usa `TEST_DATABASE_URL`; nos demais ambientes, usa `DATABASE_URL`.
 - Não incluir informações sensíveis na resposta.
 - Não executar verificações externas caras a cada probe.
 - Storage e e-mail podem possuir diagnóstico separado se não forem necessários para toda requisição.
@@ -1277,7 +1304,7 @@ GET /health/ready
 - Content type validado.
 - Timeout de servidor e clientes externos.
 - Proxy confiável configurado explicitamente antes de usar IP encaminhado.
-- Swagger desabilitado, protegido ou restrito em produção conforme estratégia definida.
+- Swagger registrado em `/docs` somente em desenvolvimento e ausente em teste e produção.
 - Mensagens internas e stack traces removidos das respostas públicas.
 - Nenhum endpoint administrativo oculto é considerado seguro apenas por não estar documentado.
 
@@ -1306,6 +1333,8 @@ Falhas externas devem possuir timeout, classificação e mensagem interna segura
 ## OpenAPI/Swagger
 
 A documentação OpenAPI é a referência dos endpoints implementados.
+
+No estado atual, a UI fica em `/docs` e o documento JSON em `/docs-json`, exclusivamente com `NODE_ENV=development`.
 
 Cada endpoint deve documentar:
 
