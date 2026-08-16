@@ -9,22 +9,21 @@ import {
 
 describe('AuthCookieService', () => {
   it('uses Secure in production and clears cookies with matching security attributes', () => {
+    const environment = validateEnvironment({
+      NODE_ENV: 'test',
+      DATABASE_URL: 'postgresql://user:password@localhost:55432/ciclera_test',
+      TEST_DATABASE_URL:
+        'postgresql://user:password@localhost:55432/ciclera_test',
+      WEB_URL: 'https://app.ciclera.example',
+      CORS_ORIGINS: 'https://app.ciclera.example',
+      JWT_ACCESS_SECRET: 'test-only-access-secret-with-at-least-32-characters',
+      JWT_ACCESS_ISSUER: 'ciclera-api-test',
+      JWT_ACCESS_AUDIENCE: 'ciclera-web-test',
+      ACCESS_TOKEN_TTL: '900',
+      REFRESH_TOKEN_TTL: '2592000',
+    });
     const service = new AuthCookieService(
-      new ConfigService(
-        validateEnvironment({
-          NODE_ENV: 'production',
-          DATABASE_URL:
-            'postgresql://user:password@localhost:55432/ciclera_dev',
-          WEB_URL: 'https://app.ciclera.example',
-          CORS_ORIGINS: 'https://app.ciclera.example',
-          JWT_ACCESS_SECRET:
-            'test-only-access-secret-with-at-least-32-characters',
-          JWT_ACCESS_ISSUER: 'ciclera-api-test',
-          JWT_ACCESS_AUDIENCE: 'ciclera-web-test',
-          ACCESS_TOKEN_TTL: '900',
-          REFRESH_TOKEN_TTL: '2592000',
-        }),
-      ),
+      new ConfigService({ ...environment, NODE_ENV: 'production' }),
     );
     const cookie = jest.fn();
     const response = { cookie } as unknown as Response;
