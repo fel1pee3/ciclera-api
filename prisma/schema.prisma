@@ -37,6 +37,7 @@ model Organization {
   auditLogs AuditLog[]
   customers Customer[]
   locations ServiceLocation[]
+  equipment Equipment[]
   createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -57,6 +58,7 @@ model Customer {
   notes              String?           @db.VarChar(2000)
   archivedAt         DateTime?         @map("archived_at") @db.Timestamptz(6)
   locations          ServiceLocation[]
+  equipment          Equipment[]
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -87,12 +89,45 @@ model ServiceLocation {
   contactPhone       String?               @map("contact_phone") @db.VarChar(32)
   accessInstructions String?               @map("access_instructions") @db.VarChar(1000)
   status             ServiceLocationStatus @default(ACTIVE)
+  equipment          Equipment[]
   createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([organizationId, id])
+  @@unique([organizationId, customerId, id])
   @@index([organizationId, customerId, status, normalizedName, id])
   @@map("service_locations")
+}
+
+model Equipment {
+  id                     String          @id @default(uuid()) @db.Uuid
+  organizationId         String          @map("organization_id") @db.Uuid
+  organization           Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  customerId             String          @map("customer_id") @db.Uuid
+  customer               Customer        @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  locationId             String          @map("location_id") @db.Uuid
+  location               ServiceLocation @relation(fields: [organizationId, customerId, locationId], references: [organizationId, customerId, id], onDelete: Restrict, onUpdate: Cascade)
+  name                   String          @db.VarChar(160)
+  normalizedName         String          @map("normalized_name") @db.VarChar(160)
+  identifier             String          @db.VarChar(80)
+  normalizedIdentifier   String          @map("normalized_identifier") @db.VarChar(80)
+  category               String          @db.VarChar(120)
+  brand                  String?         @db.VarChar(120)
+  model                  String?         @db.VarChar(120)
+  serialNumber           String?         @map("serial_number") @db.VarChar(120)
+  normalizedSerialNumber String?         @map("normalized_serial_number") @db.VarChar(120)
+  notes                  String?         @db.VarChar(2000)
+  archivedAt             DateTime?       @map("archived_at") @db.Timestamptz(6)
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, normalizedSerialNumber])
+  @@index([organizationId, normalizedName, id])
+  @@index([organizationId, normalizedIdentifier, id])
+  @@index([organizationId, customerId, archivedAt, id])
+  @@index([organizationId, locationId, archivedAt, id])
+  @@map("equipment")
 }
 
 model User {

@@ -1154,6 +1154,16 @@ de acesso, com status `ACTIVE|INACTIVE`. A foreign key composta
 `(organization_id, customer_id)` impede relações cruzadas entre tenants e todas
 as foreign keys usam `ON DELETE RESTRICT`. Não existe endpoint `DELETE` comum.
 
+`Equipment` exige cliente, local, nome, identificação e categoria; marca, modelo,
+serial e observações são opcionais. `GET /equipment` aceita paginação,
+`search`, `archive=ACTIVE|ARCHIVED|ALL`, `customerId` e `locationId`. A busca por
+prefixo normalizado cobre nome, identificação e serial. O serial informado é
+único por organização após normalização; como o índice do PostgreSQL aceita
+múltiplos valores nulos, vários equipamentos podem permanecer sem serial. A
+foreign key composta `(organization_id, customer_id, location_id)` garante no
+banco que o local pertence simultaneamente ao cliente e ao tenant informados.
+Arquivamento é idempotente, preserva o registro e não existe `DELETE` comum.
+
 ### Ordens e agenda
 
 ```text

@@ -27,6 +27,12 @@ import {
   CustomerNotFoundError,
   ServiceLocationNotFoundError,
 } from '../customers/domain/customer.errors';
+import {
+  EquipmentManagementForbiddenError,
+  EquipmentNotFoundError,
+  EquipmentRelationInvalidError,
+  EquipmentSerialConflictError,
+} from '../equipment/domain/equipment.errors';
 
 export interface ProblemDetails {
   type: string;
@@ -208,6 +214,42 @@ function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
     };
   }
 
+  if (exception instanceof EquipmentNotFoundError) {
+    return {
+      type: 'https://ciclera.com.br/problems/equipment-not-found',
+      title: 'Equipamento não encontrado',
+      detail: 'O equipamento solicitado não foi encontrado.',
+      code: 'EQUIPMENT_NOT_FOUND',
+    };
+  }
+
+  if (exception instanceof EquipmentRelationInvalidError) {
+    return {
+      type: 'https://ciclera.com.br/problems/equipment-relation-invalid',
+      title: 'Vínculo inválido',
+      detail: 'Cliente e local devem estar ativos e pertencer à organização.',
+      code: 'EQUIPMENT_RELATION_INVALID',
+    };
+  }
+
+  if (exception instanceof EquipmentSerialConflictError) {
+    return {
+      type: 'https://ciclera.com.br/problems/equipment-serial-conflict',
+      title: 'Serial já cadastrado',
+      detail: 'Já existe um equipamento com este serial na organização.',
+      code: 'EQUIPMENT_SERIAL_CONFLICT',
+    };
+  }
+
+  if (exception instanceof EquipmentManagementForbiddenError) {
+    return {
+      type: 'https://ciclera.com.br/problems/equipment-management-forbidden',
+      title: 'Acesso negado',
+      detail: 'Seu perfil não pode gerenciar equipamentos.',
+      code: 'EQUIPMENT_MANAGEMENT_FORBIDDEN',
+    };
+  }
+
   if (!(exception instanceof HttpException)) {
     return {};
   }
@@ -361,6 +403,21 @@ function getHttpStatus(exception: unknown): number {
   }
 
   if (exception instanceof CustomerManagementForbiddenError) {
+    return HttpStatus.FORBIDDEN;
+  }
+
+  if (exception instanceof EquipmentNotFoundError) {
+    return HttpStatus.NOT_FOUND;
+  }
+
+  if (
+    exception instanceof EquipmentRelationInvalidError ||
+    exception instanceof EquipmentSerialConflictError
+  ) {
+    return HttpStatus.CONFLICT;
+  }
+
+  if (exception instanceof EquipmentManagementForbiddenError) {
     return HttpStatus.FORBIDDEN;
   }
 
