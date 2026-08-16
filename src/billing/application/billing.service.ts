@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, PayloadTooLargeException } from '@nestjs/common';
 import type { AuthenticatedPrincipal } from '../../auth/domain/authenticated-principal';
 import {
   WorkOrderManagementForbiddenError,
@@ -57,9 +57,60 @@ export class BillingService {
     };
   }
 
+  async exportReady(
+    principal: AuthenticatedPrincipal,
+    query: Omit<BillingReadyQuery, 'organizationId' | 'page' | 'pageSize'>,
+  ) {
+    this.requireManager(principal);
+    const records = await this.billing.exportReady({
+      ...query,
+      organizationId: principal.organizationId,
+      limit: 5_001,
+    });
+    if (records.length > 5_000) {
+      throw new PayloadTooLargeException(
+        'Refine os filtros para exportar no máximo 5.000 ordens.',
+      );
+    }
+    return buildBillingCsv(records);
+  }
+
   private requireManager(principal: AuthenticatedPrincipal) {
     if (principal.role === 'TECHNICIAN') {
       throw new WorkOrderManagementForbiddenError();
     }
   }
+}
+
+export function buildBillingCsv(
+  records: Awaited<ReturnType<BillingRepository['exportReady']>>,
+): string {
+  const header = [
+    'numero',
+    'data_conclusao',
+    'data_aprovacao',
+    'cliente',
+    'documento',
+    'descricao',
+    'valor_centavos',
+    'status',
+  ];
+  const rows = records.map((record) => [
+    record.number.toString(),
+    record.actualEndAt.toISOString(),
+    record.approvedAt.toISOString(),
+    record.customer.name,
+    record.customerDocument ?? '',
+    `${record.serviceType} - ${record.title}`,
+    record.finalAmountInCents.toString(),
+    'READY_TO_BILL',
+  ]);
+  return `\uFEFF${[header, ...rows]
+    .map((row) => row.map(csvCell).join(';'))
+    .join('\r\n')}\r\n`;
+}
+
+function csvCell(value: string): string {
+  const protectedValue = /^[\s]*[=+\-@]/.test(value) ? `'${value}` : value;
+  return `"${protectedValue.replace(/"/g, '""')}"`;
 }

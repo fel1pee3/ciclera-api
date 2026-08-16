@@ -41,6 +41,16 @@ export interface BillingRepository {
     total: number;
     totalAmountInCents: bigint;
   }>;
+  exportReady(
+    input: Omit<BillingReadyQuery, 'page' | 'pageSize'> & { limit: number },
+  ): Promise<
+    Array<
+      BillingReadyItem & {
+        serviceType: string;
+        customerDocument: string | null;
+      }
+    >
+  >;
   markBilled(input: {
     organizationId: string;
     actorUserId: string;

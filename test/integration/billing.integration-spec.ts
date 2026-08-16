@@ -127,6 +127,13 @@ describe('Billing ready queue', () => {
     expect(result.items.map((item) => item.id)).toEqual([readyId]);
     expect(result.total).toBe(1);
     expect(result.totalAmountInCents).toBe(12_500n);
+    const csv = await billing.exportReady(owner, {
+      customerId,
+      minimumAmountInCents: 10_000n,
+      maximumAmountInCents: 20_000n,
+    });
+    expect(csv).toContain('"12500"');
+    expect(csv).not.toContain('999999');
     await expect(
       billing.listReady(technician, { page: 1, pageSize: 20 }),
     ).rejects.toBeInstanceOf(WorkOrderManagementForbiddenError);
