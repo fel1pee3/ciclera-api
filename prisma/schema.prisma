@@ -285,6 +285,8 @@ model WorkOrder {
   @@unique([organizationId, number])
   @@index([organizationId, status, createdAt(sort: Desc), id])
   @@index([organizationId, status, finalAmountInCents])
+  @@index([organizationId, status, billedAt(sort: Desc), id])
+  @@index([organizationId, status, actualEndAt, id])
   @@index([organizationId, customerId, createdAt(sort: Desc), id])
   @@index([organizationId, scheduledStartAt, id])
   @@index([organizationId, normalizedTitle, id])
