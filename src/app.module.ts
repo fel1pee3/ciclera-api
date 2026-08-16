@@ -15,6 +15,7 @@ import { StructuredLoggerService } from './observability/structured-logger.servi
 import { UsersModule } from './users/users.module';
 import { WorkOrdersModule } from './work-orders/work-orders.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { ReviewsModule } from './reviews/reviews.module';
     WorkOrdersModule,
     EvidenceModule,
     ReviewsModule,
+    BillingModule,
     HealthModule,
   ],
   providers: [StructuredLoggerService],
