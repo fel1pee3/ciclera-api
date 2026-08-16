@@ -18,6 +18,7 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { BillingModule } from './billing/billing.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { HistoryModule } from './history/history.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { HistoryModule } from './history/history.module';
     BillingModule,
     DashboardModule,
     HistoryModule,
+    ReportsModule,
     HealthModule,
   ],
   providers: [StructuredLoggerService],
