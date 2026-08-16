@@ -12,6 +12,12 @@ export function authIdentifierTracker(
     return `email:${digest(normalizeEmail(email))}`;
   }
 
+  const resetToken = body.token;
+
+  if (typeof resetToken === 'string') {
+    return `reset:${digest(resetToken)}`;
+  }
+
   const headers = isRecord(request.headers) ? request.headers : {};
   const cookieHeader = headers.cookie;
   const refreshToken =

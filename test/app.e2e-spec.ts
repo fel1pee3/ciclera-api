@@ -221,6 +221,8 @@ describe('API foundation (e2e)', () => {
     expect(documentBody.paths).toHaveProperty('/api/v1/auth/refresh');
     expect(documentBody.paths).toHaveProperty('/api/v1/auth/logout');
     expect(documentBody.paths).toHaveProperty('/api/v1/auth/logout-all');
+    expect(documentBody.paths).toHaveProperty('/api/v1/auth/forgot-password');
+    expect(documentBody.paths).toHaveProperty('/api/v1/auth/reset-password');
 
     await request(nonDevelopmentApp.getHttpServer())
       .get('/docs-json')

@@ -43,6 +43,7 @@ describe('AuthService login', () => {
       findAccount: jest.fn(),
     };
     passwords = {
+      hash: jest.fn(),
       verify: jest.fn(),
       performDummyVerification: jest.fn(),
     };
@@ -68,7 +69,11 @@ describe('AuthService login', () => {
       sessions,
       accessTokens,
       refreshTokens,
-      { refreshTokenTtlSeconds: 2_592_000 },
+      {
+        refreshTokenTtlSeconds: 2_592_000,
+        passwordResetTokenTtlSeconds: 1_800,
+        webUrl: 'http://localhost:3000',
+      },
     );
   });
 

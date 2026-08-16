@@ -2,11 +2,22 @@ import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrganizationStatus, UserRole, UserStatus } from '@prisma/client';
-import { hash } from 'argon2';
+import { hash, verify } from 'argon2';
 import { randomUUID } from 'node:crypto';
 import request, { Response as SupertestResponse } from 'supertest';
 import { configureApplication } from '../../src/application';
 import { AppModule } from '../../src/app.module';
+import { PasswordResetService } from '../../src/auth/application/password-reset.service';
+import { EMAIL_GATEWAY } from '../../src/auth/application/ports/email-gateway.port';
+import type {
+  EmailGateway,
+  PasswordResetEmail,
+} from '../../src/auth/application/ports/email-gateway.port';
+import { PASSWORD_RESET_DELIVERY_OBSERVER } from '../../src/auth/application/ports/password-reset-delivery-observer.port';
+import type {
+  PasswordResetDeliveryFailureStage,
+  PasswordResetDeliveryObserver,
+} from '../../src/auth/application/ports/password-reset-delivery-observer.port';
 import {
   ACCESS_TOKEN_SERVICE,
   REFRESH_TOKEN_SERVICE,
@@ -32,22 +43,71 @@ interface TestIdentity {
   displayEmail: string;
 }
 
+class TestEmailGateway implements EmailGateway {
+  availability: 'available' | 'disabled' | 'unavailable' = 'available';
+  failDeliveries = false;
+  readonly messages: PasswordResetEmail[] = [];
+
+  isAvailable(): boolean {
+    return this.availability === 'available';
+  }
+
+  sendPasswordReset(input: PasswordResetEmail): Promise<void> {
+    if (this.failDeliveries) {
+      return Promise.reject(new Error('Controlled test delivery failure.'));
+    }
+
+    this.messages.push(input);
+    return Promise.resolve();
+  }
+
+  reset(): void {
+    this.availability = 'available';
+    this.failDeliveries = false;
+    this.messages.length = 0;
+  }
+}
+
+class TestPasswordResetDeliveryObserver implements PasswordResetDeliveryObserver {
+  readonly failures: PasswordResetDeliveryFailureStage[] = [];
+
+  recordFailure(stage: PasswordResetDeliveryFailureStage): void {
+    this.failures.push(stage);
+  }
+
+  reset(): void {
+    this.failures.length = 0;
+  }
+}
+
 describe('Authentication flow', () => {
   let moduleRef: TestingModule;
   let app: NestExpressApplication;
   let prisma: PrismaService;
   let accessTokens: AccessTokenService;
   let refreshTokens: RefreshTokenService;
+  let emailGateway: TestEmailGateway;
+  let deliveryObserver: TestPasswordResetDeliveryObserver;
+  let passwordResetService: PasswordResetService;
+  let originalPasswordHash: string;
   let organizationAId: string;
   let organizationBId: string;
   let userA: TestIdentity;
   let userB: TestIdentity;
 
   beforeAll(async () => {
+    emailGateway = new TestEmailGateway();
+    deliveryObserver = new TestPasswordResetDeliveryObserver();
     moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(EMAIL_GATEWAY)
+      .useValue(emailGateway)
+      .overrideProvider(PASSWORD_RESET_DELIVERY_OBSERVER)
+      .useValue(deliveryObserver)
+      .compile();
     prisma = moduleRef.get(PrismaService);
+    passwordResetService = moduleRef.get(PasswordResetService);
     accessTokens = moduleRef.get<AccessTokenService>(ACCESS_TOKEN_SERVICE);
     refreshTokens = moduleRef.get<RefreshTokenService>(REFRESH_TOKEN_SERVICE);
 
@@ -61,7 +121,7 @@ describe('Authentication flow', () => {
       );
     }
 
-    const passwordHash = await hash(testPassword);
+    originalPasswordHash = await hash(testPassword);
     const organizationA = await prisma.organization.create({
       data: { name: 'Auth tenant A', status: OrganizationStatus.ACTIVE },
     });
@@ -77,7 +137,7 @@ describe('Authentication flow', () => {
         name: 'Auth Owner A',
         email: `Auth.Owner.A.${suffix}@Example.test`,
         normalizedEmail: `auth.owner.a.${suffix}@example.test`,
-        passwordHash,
+        passwordHash: originalPasswordHash,
         role: UserRole.OWNER,
         status: UserStatus.ACTIVE,
       },
@@ -88,7 +148,7 @@ describe('Authentication flow', () => {
         name: 'Auth Admin B',
         email: `auth.admin.b.${suffix}@example.test`,
         normalizedEmail: `auth.admin.b.${suffix}@example.test`,
-        passwordHash,
+        passwordHash: originalPasswordHash,
         role: UserRole.ADMIN,
         status: UserStatus.ACTIVE,
       },
@@ -117,12 +177,20 @@ describe('Authentication flow', () => {
   });
 
   beforeEach(async () => {
+    emailGateway.reset();
+    deliveryObserver.reset();
+    await prisma.passwordResetToken.deleteMany({
+      where: { organizationId: { in: [organizationAId, organizationBId] } },
+    });
     await prisma.session.deleteMany({
       where: { organizationId: { in: [organizationAId, organizationBId] } },
     });
     await prisma.user.updateMany({
       where: { id: { in: [userA.id, userB.id] } },
-      data: { status: UserStatus.ACTIVE },
+      data: {
+        status: UserStatus.ACTIVE,
+        passwordHash: originalPasswordHash,
+      },
     });
     await prisma.organization.updateMany({
       where: { id: { in: [organizationAId, organizationBId] } },
@@ -132,6 +200,9 @@ describe('Authentication flow', () => {
 
   afterAll(async () => {
     if (prisma && organizationAId && organizationBId) {
+      await prisma.passwordResetToken.deleteMany({
+        where: { organizationId: { in: [organizationAId, organizationBId] } },
+      });
       await prisma.session.deleteMany({
         where: { organizationId: { in: [organizationAId, organizationBId] } },
       });
@@ -180,6 +251,298 @@ describe('Authentication flow', () => {
     expect(session.refreshTokenHash).toMatch(/^[0-9a-f]{64}$/);
     expect(session.refreshTokenHash).not.toBe(rawRefreshToken);
     expect(session.organizationId).toBe(organizationAId);
+  });
+
+  it('returns the same accepted response without revealing whether an e-mail exists', async () => {
+    const known = await request(app.getHttpServer())
+      .post('/api/v1/auth/forgot-password')
+      .set('Origin', allowedOrigin)
+      .send({ email: `  ${userA.email.toUpperCase()}  ` })
+      .expect(202);
+    const unknown = await request(app.getHttpServer())
+      .post('/api/v1/auth/forgot-password')
+      .set('Origin', allowedOrigin)
+      .send({ email: 'unknown-password-reset@example.test' })
+      .expect(202);
+    await passwordResetService.onApplicationShutdown();
+
+    expect(responseBody(known)).toEqual(responseBody(unknown));
+    expect(responseBody(known)).toEqual({
+      message:
+        'Se o e-mail estiver cadastrado, enviaremos as instruções de recuperação.',
+    });
+    expect(emailGateway.messages).toHaveLength(1);
+
+    const resetToken = tokenFromResetUrl(emailGateway.messages[0]?.resetUrl);
+    const persisted = await prisma.passwordResetToken.findMany({
+      where: { organizationId: userA.organizationId, userId: userA.id },
+    });
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0]?.tokenHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(persisted[0]?.tokenHash).not.toBe(resetToken);
+  });
+
+  it('resets the password once and revokes every existing session in that tenant', async () => {
+    const firstSession = await createSession(userA);
+    const secondSession = await createSession(userA);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/forgot-password')
+      .set('Origin', allowedOrigin)
+      .send({ email: userA.email })
+      .expect(202);
+    await passwordResetService.onApplicationShutdown();
+    const resetToken = tokenFromResetUrl(emailGateway.messages[0]?.resetUrl);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/reset-password')
+      .set('Origin', allowedOrigin)
+      .send({ token: resetToken, password: 'CicleraResetTest!2026' })
+      .expect(204);
+
+    await request(app.getHttpServer())
+      .get('/api/v1/auth/me')
+      .set('Cookie', `${accessCookieName}=${firstSession.accessToken}`)
+      .expect(401);
+    await request(app.getHttpServer())
+      .get('/api/v1/auth/me')
+      .set('Cookie', `${accessCookieName}=${secondSession.accessToken}`)
+      .expect(401);
+
+    const revokedSessions = await prisma.session.findMany({
+      where: { organizationId: userA.organizationId, userId: userA.id },
+      select: { revokedAt: true, revocationReason: true },
+    });
+    expect(revokedSessions).not.toHaveLength(0);
+    expect(
+      revokedSessions.every(
+        (session) =>
+          session.revokedAt !== null &&
+          session.revocationReason === 'PASSWORD_RESET',
+      ),
+    ).toBe(true);
+
+    const updatedUser = await prisma.user.findUniqueOrThrow({
+      where: { id: userA.id },
+      select: { passwordHash: true },
+    });
+    await expect(verify(updatedUser.passwordHash, testPassword)).resolves.toBe(
+      false,
+    );
+    await expect(
+      verify(updatedUser.passwordHash, 'CicleraResetTest!2026'),
+    ).resolves.toBe(true);
+
+    const reused = await request(app.getHttpServer())
+      .post('/api/v1/auth/reset-password')
+      .set('Origin', allowedOrigin)
+      .send({ token: resetToken, password: 'AnotherResetTest!2026' })
+      .expect(400);
+    expect(responseBody(reused)).toMatchObject({
+      code: 'INVALID_PASSWORD_RESET_TOKEN',
+      status: 400,
+    });
+  });
+
+  it('rejects invalid, expired and superseded reset tokens with the same safe error', async () => {
+    const invalid = await resetPassword(
+      'x'.repeat(43),
+      'NewPassword!2026',
+      400,
+    );
+
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/forgot-password')
+      .set('Origin', allowedOrigin)
+      .send({ email: userA.email })
+      .expect(202);
+    await passwordResetService.onApplicationShutdown();
+    const firstToken = tokenFromResetUrl(emailGateway.messages[0]?.resetUrl);
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/forgot-password')
+      .set('Origin', allowedOrigin)
+      .send({ email: userA.email })
+      .expect(202);
+    await passwordResetService.onApplicationShutdown();
+    const secondToken = tokenFromResetUrl(emailGateway.messages[1]?.resetUrl);
+    const superseded = await resetPassword(firstToken, 'NewPassword!2026', 400);
+
+    const latest = await prisma.passwordResetToken.findFirstOrThrow({
+      where: { organizationId: userA.organizationId, userId: userA.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    await prisma.passwordResetToken.update({
+      where: { id: latest.id },
+      data: { expiresAt: new Date(Date.now() - 1_000) },
+    });
+    const expired = await resetPassword(secondToken, 'NewPassword!2026', 400);
+
+    for (const response of [invalid, superseded, expired]) {
+      expect(responseBody(response)).toMatchObject({
+        code: 'INVALID_PASSWORD_RESET_TOKEN',
+        status: 400,
+      });
+      expect(JSON.stringify(responseBody(response))).not.toContain(userA.id);
+      expect(JSON.stringify(responseBody(response))).not.toContain(
+        userA.organizationId,
+      );
+    }
+  });
+
+  it('allows only one concurrent password reset to consume a token', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/forgot-password')
+      .set('Origin', allowedOrigin)
+      .send({ email: userB.email })
+      .expect(202);
+    await passwordResetService.onApplicationShutdown();
+    const resetToken = tokenFromResetUrl(emailGateway.messages[0]?.resetUrl);
+
+    const responses = await Promise.all([
+      resetPassword(resetToken, 'ConcurrentResetA!2026'),
+      resetPassword(resetToken, 'ConcurrentResetB!2026'),
+    ]);
+    expect(responses.map((response) => response.status).sort()).toEqual([
+      204, 400,
+    ]);
+
+    const updatedUser = await prisma.user.findUniqueOrThrow({
+      where: { id: userB.id },
+      select: { passwordHash: true },
+    });
+    const matches = await Promise.all([
+      verify(updatedUser.passwordHash, 'ConcurrentResetA!2026'),
+      verify(updatedUser.passwordHash, 'ConcurrentResetB!2026'),
+    ]);
+    expect(matches.filter(Boolean)).toHaveLength(1);
+  });
+
+  it('keeps the complete public contract equivalent for active, unknown and inactive identities when delivery is available', async () => {
+    const active = await forgotPassword(userA.email, 202);
+    const unknown = await forgotPassword('available-unknown@example.test', 202);
+
+    await prisma.user.update({
+      where: { id: userB.id },
+      data: { status: UserStatus.INACTIVE },
+    });
+    const inactiveUser = await forgotPassword(userB.email, 202);
+
+    await prisma.organization.update({
+      where: { id: organizationBId },
+      data: { status: OrganizationStatus.INACTIVE },
+    });
+    await prisma.user.update({
+      where: { id: userB.id },
+      data: { status: UserStatus.ACTIVE },
+    });
+    const inactiveOrganization = await forgotPassword(userB.email, 202);
+    await passwordResetService.onApplicationShutdown();
+
+    const contracts = [active, unknown, inactiveUser, inactiveOrganization].map(
+      forgotPasswordPublicContract,
+    );
+    expect(contracts).toEqual([
+      contracts[0],
+      contracts[0],
+      contracts[0],
+      contracts[0],
+    ]);
+    expect(emailGateway.messages).toHaveLength(1);
+    expect(deliveryObserver.failures).toEqual([]);
+    expect(
+      await prisma.passwordResetToken.count({
+        where: { organizationId: userA.organizationId, userId: userA.id },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.passwordResetToken.count({
+        where: { organizationId: userB.organizationId, userId: userB.id },
+      }),
+    ).toBe(0);
+  });
+
+  it.each(['disabled', 'unavailable'] as const)(
+    'returns the same complete 503 contract before identity lookup when the gateway is %s',
+    async (availability) => {
+      emailGateway.availability = availability;
+
+      const known = await forgotPassword(userA.email, 503);
+      const unknown = await forgotPassword(
+        `${availability}-unknown@example.test`,
+        503,
+      );
+
+      expect(forgotPasswordPublicContract(known)).toEqual(
+        forgotPasswordPublicContract(unknown),
+      );
+      expect(responseBody(known)).toMatchObject({
+        code: 'PASSWORD_RESET_UNAVAILABLE',
+        title: 'Recuperação indisponível',
+        detail: 'Não foi possível enviar as instruções de recuperação.',
+      });
+      expect(emailGateway.messages).toHaveLength(0);
+      expect(deliveryObserver.failures).toEqual([]);
+      expect(
+        await prisma.passwordResetToken.count({
+          where: { organizationId: userA.organizationId, userId: userA.id },
+        }),
+      ).toBe(0);
+    },
+  );
+
+  it('keeps send-time failure indistinguishable from an unknown identity and invalidates the undelivered token', async () => {
+    emailGateway.failDeliveries = true;
+
+    const known = await forgotPassword(userA.email, 202);
+    const unknown = await forgotPassword(
+      'delivery-failure-unknown@example.test',
+      202,
+    );
+    await passwordResetService.onApplicationShutdown();
+
+    expect(forgotPasswordPublicContract(known)).toEqual(
+      forgotPasswordPublicContract(unknown),
+    );
+    expect(deliveryObserver.failures).toEqual(['delivery']);
+    expect(emailGateway.messages).toHaveLength(0);
+    const failedDeliveryToken = await prisma.passwordResetToken.findFirst({
+      where: { organizationId: userA.organizationId, userId: userA.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(failedDeliveryToken?.usedAt).not.toBeNull();
+  });
+
+  it('does not issue tokens for inactive users', async () => {
+    await prisma.user.update({
+      where: { id: userA.id },
+      data: { status: UserStatus.INACTIVE },
+    });
+
+    await forgotPassword(userA.email, 202);
+    await passwordResetService.onApplicationShutdown();
+    expect(emailGateway.messages).toHaveLength(0);
+    expect(
+      await prisma.passwordResetToken.count({
+        where: { organizationId: userA.organizationId, userId: userA.id },
+      }),
+    ).toBe(0);
+  });
+
+  it('rejects unsafe reset inputs and origins before changing credentials', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/forgot-password')
+      .set('Origin', allowedOrigin)
+      .send({ email: userA.email, organizationId: userB.organizationId })
+      .expect(422);
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/forgot-password')
+      .send({ email: userA.email })
+      .expect(403);
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/reset-password')
+      .set('Origin', allowedOrigin)
+      .send({ token: 'invalid', password: 'short' })
+      .expect(422);
   });
 
   it('returns the same generic error for an unknown e-mail, wrong password and inactive identity', async () => {
@@ -465,7 +828,7 @@ describe('Authentication flow', () => {
     });
   });
 
-  it('rate limits login by normalized identifier and refresh by opaque session id', async () => {
+  it('rate limits login, refresh and password recovery without storing raw identifiers', async () => {
     const loginAttempts: SupertestResponse[] = [];
     for (let attempt = 0; attempt < 11; attempt += 1) {
       loginAttempts.push(
@@ -500,16 +863,75 @@ describe('Authentication flow', () => {
     expect(responseBody(limitedRefresh)).toMatchObject({
       code: 'RATE_LIMITED',
     });
+
+    const forgotAttempts: SupertestResponse[] = [];
+    const forgotEmail = `rate-limited-reset-${Date.now()}@example.test`;
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      forgotAttempts.push(
+        await request(app.getHttpServer())
+          .post('/api/v1/auth/forgot-password')
+          .set('Origin', allowedOrigin)
+          .send({ email: forgotEmail }),
+      );
+    }
+    expect(
+      forgotAttempts.slice(0, 10).every((response) => response.status === 202),
+    ).toBe(true);
+    expect(forgotAttempts[10]?.status).toBe(429);
+    await passwordResetService.onApplicationShutdown();
+
+    const resetAttempts: SupertestResponse[] = [];
+    const invalidResetToken = 'z'.repeat(43);
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      resetAttempts.push(
+        await request(app.getHttpServer())
+          .post('/api/v1/auth/reset-password')
+          .set('Origin', allowedOrigin)
+          .send({ token: invalidResetToken, password: 'NewPassword!2026' }),
+      );
+    }
+    expect(
+      resetAttempts.slice(0, 10).every((response) => response.status === 400),
+    ).toBe(true);
+    expect(resetAttempts[10]?.status).toBe(429);
   });
 
   function login(
     email: string,
     password = testPassword,
+    expectedStatus?: number,
   ): Promise<SupertestResponse> {
-    return request(app.getHttpServer())
+    const test = request(app.getHttpServer())
       .post('/api/v1/auth/login')
       .set('Origin', allowedOrigin)
       .send({ email, password });
+
+    return expectedStatus === undefined ? test : test.expect(expectedStatus);
+  }
+
+  function resetPassword(
+    token: string,
+    password: string,
+    expectedStatus?: number,
+  ): Promise<SupertestResponse> {
+    const test = request(app.getHttpServer())
+      .post('/api/v1/auth/reset-password')
+      .set('Origin', allowedOrigin)
+      .send({ token, password });
+
+    return expectedStatus === undefined ? test : test.expect(expectedStatus);
+  }
+
+  function forgotPassword(
+    email: string,
+    expectedStatus?: number,
+  ): Promise<SupertestResponse> {
+    const test = request(app.getHttpServer())
+      .post('/api/v1/auth/forgot-password')
+      .set('Origin', allowedOrigin)
+      .send({ email });
+
+    return expectedStatus === undefined ? test : test.expect(expectedStatus);
   }
 
   function postRefresh(cookie: string): request.Test {
@@ -553,6 +975,32 @@ describe('Authentication flow', () => {
     };
   }
 });
+
+function forgotPasswordPublicContract(
+  response: SupertestResponse,
+): Record<string, unknown> {
+  const requestId: unknown = response.headers['x-request-id'];
+  expect(requestId).toEqual(expect.stringMatching(/^req_[0-9a-f-]{36}$/));
+  const body = { ...responseBody(response) };
+
+  if (typeof body.requestId === 'string') {
+    expect(body.requestId).toBe(requestId);
+    body.requestId = '<request-id>';
+  }
+
+  return {
+    status: response.status,
+    body,
+    headers: {
+      cacheControl: response.headers['cache-control'],
+      contentType: response.headers['content-type'],
+      corsOrigin: response.headers['access-control-allow-origin'],
+      corsCredentials: response.headers['access-control-allow-credentials'],
+      requestId: '<request-id>',
+      hasSetCookie: response.headers['set-cookie'] !== undefined,
+    },
+  };
+}
 
 function setCookieHeaders(response: SupertestResponse): string[] {
   const value: unknown = response.headers['set-cookie'];
@@ -621,4 +1069,18 @@ function databaseNameFromTestUrl(): string {
   }
 
   return decodeURIComponent(new URL(testDatabaseUrl).pathname.slice(1));
+}
+
+function tokenFromResetUrl(value: string | undefined): string {
+  if (!value) {
+    throw new Error('Expected a password reset URL.');
+  }
+
+  const token = new URLSearchParams(new URL(value).hash.slice(1)).get('token');
+
+  if (!token) {
+    throw new Error('Expected a password reset token in the URL fragment.');
+  }
+
+  return token;
 }

@@ -84,9 +84,9 @@ Docker pode ser utilizado para dependências locais, mas a aplicação não deve
 
 Na pasta `ciclera-api`:
 
-```bash
+```powershell
 npm ci
-cp .env.example .env
+Copy-Item .env.example .env
 docker compose up -d --wait postgres
 npm run db:check
 npm run db:check:test
@@ -178,8 +178,9 @@ docker compose up -d --wait postgres
 | Comando | Responsabilidade |
 | --- | --- |
 | `npm run start:dev` | Iniciar a API com reload em desenvolvimento |
-| `npm run build` | Compilar a aplicação |
-| `npm run start:prod` | Executar o build de produção |
+| `npm run build` | Compilar somente `src` e validar o artefato de produção |
+| `npm run build:check` | Confirmar `dist/main.js` e rejeitar seed/testes no artefato |
+| `npm run start:prod` | Executar `dist/main.js`, o entrypoint convencional de produção |
 | `npm run lint` | Executar lint |
 | `npm run typecheck` | Validar tipos sem gerar build |
 | `npm run db:check` | Validar a conexão Node.js com o banco de desenvolvimento |
@@ -199,11 +200,27 @@ docker compose up -d --wait postgres
 
 Não documentar scripts inexistentes indefinidamente. Criá-los ou atualizar a tabela quando a configuração real for estabelecida.
 
+O build NestJS usa `src` como `rootDir` explícito. O resultado esperado contém
+`dist/main.js` e os módulos importados pela aplicação, sem `dist/prisma`,
+`dist/test` ou `dist/src/main.js`. `prisma/seed.ts` não participa do artefato de
+produção e continua sendo executado exclusivamente pelos scripts `db:seed` e
+`db:seed:test` com `ts-node`. O build de produção desabilita o cache incremental
+para que a remoção de `dist` nunca seja seguida por uma emissão parcial baseada
+em um `.tsbuildinfo` externo ao diretório de saída.
+
+Para validar o ciclo de produção em um build limpo:
+
+```powershell
+if (Test-Path -LiteralPath dist) { Remove-Item -LiteralPath dist -Recurse -Force }
+npm run build
+npm run start:prod
+```
+
 ## Variáveis de ambiente
 
 Manter um `.env.example` versionado e uma validação executada antes da aplicação iniciar.
 
-As variáveis da fundação HTTP, da infraestrutura PostgreSQL, do Prisma e da autenticação presentes em `.env.example` estão ativas. Variáveis de storage, e-mail e recuperação de senha continuam reservadas aos checkpoints correspondentes.
+As variáveis da fundação HTTP, da infraestrutura PostgreSQL, do Prisma, da autenticação e da recuperação de senha presentes em `.env.example` estão ativas. Storage e provedor externo de e-mail continuam reservados aos checkpoints correspondentes.
 
 ### Aplicação e banco
 
@@ -233,6 +250,8 @@ As variáveis da fundação HTTP, da infraestrutura PostgreSQL, do Prisma e da a
 | `JWT_ACCESS_AUDIENCE` | Sim | Audiência exata aceita no access token |
 | `ACCESS_TOKEN_TTL` | Sim | Validade do access token em segundos, entre 60 e 3600 |
 | `REFRESH_TOKEN_TTL` | Sim | Validade da sessão renovável em segundos, entre uma hora e 90 dias |
+| `PASSWORD_RESET_TOKEN_TTL` | Não | Validade do token de redefinição em segundos, entre 5 minutos e 24 horas; padrão `1800` |
+| `PASSWORD_RESET_DELIVERY_MODE` | Não | `local` em desenvolvimento/teste ou `disabled`; produção proíbe `local` e usa `disabled` enquanto não houver provedor |
 
 Os cookies são host-only, `HttpOnly` e `SameSite=Strict`. `Secure` é derivado de `NODE_ENV=production`, sem uma variável que possa enfraquecê-lo acidentalmente. O access cookie usa `Path=/`; o refresh cookie usa `Path=/api/v1/auth`.
 
@@ -257,7 +276,36 @@ Os cookies são host-only, `HttpOnly` e `SameSite=Strict`. `Secure` é derivado 
 | `EMAIL_FROM` | Ao habilitar e-mails | Remetente transacional |
 | `EMAIL_REPLY_TO` | Não | Endereço para respostas |
 
-Exemplo seguro implementado até o CP-08:
+O adapter `local` escreve o link de redefinição somente no terminal da API em
+`development`, sem registrar o e-mail em texto aberto. Em `test`, a entrega local
+não escreve o token; os testes usam um gateway controlado. Em produção, o modo
+local é recusado no bootstrap. Enquanto não houver provedor transacional, o modo
+`disabled` faz todas as solicitações falharem com `503`, sem consultar a conta e
+sem produzir sucesso falso.
+
+O contrato público de `forgot-password` depende apenas do estado sistêmico do
+gateway, nunca da existência ou do status da identidade:
+
+- Com o gateway disponível, usuário ativo, usuário inexistente, usuário inativo e
+  organização inativa recebem o mesmo `202`, body, headers e mensagem. Somente a
+  identidade ativa produz um token e uma tentativa de entrega. A resposta não
+  aguarda decisões sobre a identidade nem a chamada de entrega, reduzindo também
+  diferenças observáveis de duração.
+- Com o gateway globalmente desabilitado ou indisponível, todos os e-mails recebem
+  o mesmo `503 PASSWORD_RESET_UNAVAILABLE` antes da consulta da identidade e
+  nenhum token é criado.
+- Uma falha específica iniciada durante o envio não altera a resposta pública:
+  ela permanece `202`, o token não entregue é invalidado e a API registra apenas
+  `auth.password-reset.delivery-failed`, sem e-mail, token ou URL.
+
+Nesse contrato, `202` significa que a solicitação foi aceita, não que o provedor
+confirmou a entrega. O processo acompanha as solicitações já iniciadas e aguarda
+sua conclusão no graceful shutdown, mas não oferece retry durável após uma queda
+abrupta. Um provedor real e seu tratamento operacional de indisponibilidade são
+obrigatórios antes do deploy. Retry durável ou outbox ficam reservados para a
+evolução de infraestrutura; não existe fila persistente neste checkpoint.
+
+Exemplo seguro implementado até o CP-09:
 
 ```env
 NODE_ENV=development
@@ -272,6 +320,8 @@ JWT_ACCESS_ISSUER=ciclera-api-local
 JWT_ACCESS_AUDIENCE=ciclera-web-local
 ACCESS_TOKEN_TTL=900
 REFRESH_TOKEN_TTL=2592000
+PASSWORD_RESET_TOKEN_TTL=1800
+PASSWORD_RESET_DELIVERY_MODE=local
 
 POSTGRES_USER=ciclera_local
 POSTGRES_PASSWORD=replace-with-a-local-only-password
@@ -603,7 +653,7 @@ de autorização:
   consultar novamente o usuário dentro da organização da sessão.
 - Os guards de autenticação e perfis são globais e fail-closed; rotas públicas
   precisam do decorator explícito `Public`, limitado aos health checks, login,
-  refresh, logout idempotente e código exclusivo de testes.
+  refresh, logout idempotente, recuperação de senha e código exclusivo de testes.
 - Usuário inexistente ou inativo e organização inativa recebem o mesmo erro
   genérico `401`, sem revelar identidade, tenant ou status da conta.
 - `CurrentPrincipal` entrega o principal tipado aos controllers protegidos.
@@ -628,7 +678,7 @@ CSPRNG e persistidos somente como SHA-256. Cada refresh revoga o registro anteri
 e cria outro na mesma família dentro de uma transação; reutilizar um token
 rotacionado revoga a família inteira.
 
-Login e refresh possuem limites em memória por IP e por identificador normalizado
+Login, refresh e recuperação de senha possuem limites em memória por IP e por identificador normalizado
 armazenado no limitador somente como digest. Essa estratégia atende ao processo
 local de instância única; uma implantação com múltiplas réplicas precisará de um
 storage compartilhado para manter o limite global.
@@ -636,6 +686,12 @@ storage compartilhado para manter o limite global.
 Como os tokens são cookies, todos os `POST` de autenticação exigem `Origin`
 presente na allowlist, além de CORS com credenciais e `SameSite=Strict`. Clientes
 não-browser devem enviar explicitamente uma origem permitida.
+
+A recuperação cria tokens opacos de 32 bytes por CSPRNG e persiste somente o
+SHA-256. Uma nova solicitação invalida tokens anteriores do mesmo usuário. A
+redefinição consome o token, atualiza o hash Argon2id, invalida os demais tokens e
+revoga todas as sessões do usuário dentro do tenant em uma única transação. Tokens
+inválidos, expirados, substituídos ou já utilizados recebem o mesmo erro público.
 
 ## Autorização e RBAC
 
@@ -1032,10 +1088,12 @@ Esta seção apresenta os recursos esperados, não substitui a especificação O
 | `POST /api/v1/auth/refresh` | Refresh cookie e `Origin` permitido | `204` | Sem body; rotaciona ambos os cookies |
 | `POST /api/v1/auth/logout` | Público e idempotente, com `Origin` permitido | `204` | Sem body; revoga a sessão reconhecida e limpa cookies |
 | `POST /api/v1/auth/logout-all` | Access cookie válido e `Origin` permitido | `204` | Sem body; revoga as sessões do usuário no tenant e limpa cookies |
+| `POST /api/v1/auth/forgot-password` | Público, com `Origin` permitido | `202` | Mensagem genérica; nunca revela se o e-mail existe |
+| `POST /api/v1/auth/reset-password` | Público, com `Origin` permitido | `204` | Consome token de uso único, redefine senha e revoga sessões |
 
-Tokens, hashes e status internos nunca aparecem nos bodies. Recuperação de
-senha (`forgot-password` e `reset-password`) pertence ao CP-09 e não está
-registrada nesta versão.
+Tokens, hashes, identidade interna e status de conta nunca aparecem nos bodies.
+O token de redefinição é entregue somente pelo `EmailGateway`; o adapter local
+controlado existe apenas para desenvolvimento.
 
 ### Organização e usuários
 
@@ -1517,6 +1575,38 @@ curl -i -b .ciclera-local-cookies.txt -c .ciclera-local-cookies.txt \
   -H "Origin: http://localhost:3000" \
   -X POST http://localhost:3333/api/v1/auth/logout
 ```
+
+Recuperação local: faça a solicitação e copie o valor depois de `#token=` do
+evento `auth.password-reset.local-delivery` exibido exclusivamente no terminal
+da API em desenvolvimento. A rota visual `/redefinir-senha` pertence ao CP-10;
+até lá, envie o token diretamente para a API:
+
+```powershell
+$headers = @{ Origin = 'http://localhost:3000' }
+$forgotBody = @{ email = 'owner.a@demo.ciclera.local' } | ConvertTo-Json
+
+Invoke-WebRequest `
+  -Uri 'http://localhost:3333/api/v1/auth/forgot-password' `
+  -Method Post `
+  -Headers $headers `
+  -ContentType 'application/json' `
+  -Body $forgotBody
+
+$resetBody = @{
+  token = 'COLE_AQUI_O_TOKEN_LOCAL'
+  password = 'NovaSenhaLocal!2026'
+} | ConvertTo-Json
+
+Invoke-WebRequest `
+  -Uri 'http://localhost:3333/api/v1/auth/reset-password' `
+  -Method Post `
+  -Headers $headers `
+  -ContentType 'application/json' `
+  -Body $resetBody
+```
+
+O link e o token locais são credenciais temporárias. Não os envie para logs de
+produção, tickets ou analytics.
 
 `.ciclera-local-cookies.txt` está ignorado pelo Git e deve ser removido depois
 do teste porque contém credenciais temporárias de sessão.

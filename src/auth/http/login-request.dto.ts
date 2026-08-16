@@ -1,7 +1,7 @@
-import { Transform, TransformFnParams } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { normalizeEmail } from '../application/auth.service';
+import { normalizeEmailInput } from './auth-input.transforms';
 
 export class LoginRequestDto {
   @ApiProperty({ example: 'owner.a@demo.ciclera.local', maxLength: 320 })
@@ -15,9 +15,4 @@ export class LoginRequestDto {
   @MinLength(8, { message: 'A senha deve ter pelo menos 8 caracteres.' })
   @MaxLength(128, { message: 'A senha deve ter no máximo 128 caracteres.' })
   password!: string;
-}
-
-function normalizeEmailInput(input: TransformFnParams): unknown {
-  const value: unknown = input.value;
-  return typeof value === 'string' ? normalizeEmail(value) : value;
 }

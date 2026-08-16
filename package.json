@@ -11,13 +11,14 @@
     "npm": "10.x"
   },
   "scripts": {
-    "build": "nest build",
+    "build": "nest build && npm run build:check",
+    "build:check": "node scripts/check-production-build.mjs",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"prisma/**/*.ts\" \"scripts/**/*.mjs\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"prisma/**/*.ts\" \"scripts/**/*.mjs\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
+    "start:prod": "node dist/main.js",
     "lint": "eslint \"{src,apps,libs,test,prisma}/**/*.ts\"",
     "lint:fix": "npm run lint -- --fix",
     "typecheck": "tsc --noEmit",

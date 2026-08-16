@@ -29,6 +29,8 @@ describe('validateEnvironment', () => {
     ]);
     expect(environment.ACCESS_TOKEN_TTL).toBe(900);
     expect(environment.REFRESH_TOKEN_TTL).toBe(2_592_000);
+    expect(environment.PASSWORD_RESET_TOKEN_TTL).toBe(1_800);
+    expect(environment.PASSWORD_RESET_DELIVERY_MODE).toBe('local');
   });
 
   it('prevents bootstrap when required configuration is missing', () => {
@@ -45,6 +47,16 @@ describe('validateEnvironment', () => {
         ACCESS_TOKEN_TTL: '7200',
       }),
     ).toThrow(/JWT_ACCESS_SECRET.*ACCESS_TOKEN_TTL/);
+  });
+
+  it('forbids local password-reset delivery in production', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        NODE_ENV: 'production',
+        PASSWORD_RESET_DELIVERY_MODE: 'local',
+      }),
+    ).toThrow(/PASSWORD_RESET_DELIVERY_MODE/);
   });
 
   it('does not include an invalid secret value in the failure message', () => {

@@ -28,6 +28,13 @@ const rawEnvironmentSchema = z.object({
     .int()
     .min(3_600)
     .max(90 * 24 * 60 * 60),
+  PASSWORD_RESET_TOKEN_TTL: z.coerce
+    .number()
+    .int()
+    .min(300)
+    .max(24 * 60 * 60)
+    .default(1_800),
+  PASSWORD_RESET_DELIVERY_MODE: z.enum(['local', 'disabled']).optional(),
 });
 
 export type NodeEnvironment = 'development' | 'test' | 'production';
@@ -47,6 +54,8 @@ export interface EnvironmentVariables {
   JWT_ACCESS_AUDIENCE: string;
   ACCESS_TOKEN_TTL: number;
   REFRESH_TOKEN_TTL: number;
+  PASSWORD_RESET_TOKEN_TTL: number;
+  PASSWORD_RESET_DELIVERY_MODE: 'local' | 'disabled';
 }
 
 export function validateEnvironment(
@@ -79,6 +88,15 @@ export function validateEnvironment(
 
   const webUrl = normalizeWebUrl(data.WEB_URL ?? localWebOrigin, issues);
   const corsOrigins = parseCorsOrigins(data.CORS_ORIGINS ?? webUrl, issues);
+  const passwordResetDeliveryMode =
+    data.PASSWORD_RESET_DELIVERY_MODE ??
+    (data.NODE_ENV === 'production' ? 'disabled' : 'local');
+
+  if (data.NODE_ENV === 'production' && passwordResetDeliveryMode === 'local') {
+    issues.push(
+      'PASSWORD_RESET_DELIVERY_MODE: local delivery is forbidden in production',
+    );
+  }
 
   if (issues.length > 0) {
     throwEnvironmentError(issues);
@@ -98,6 +116,8 @@ export function validateEnvironment(
     JWT_ACCESS_AUDIENCE: data.JWT_ACCESS_AUDIENCE,
     ACCESS_TOKEN_TTL: data.ACCESS_TOKEN_TTL,
     REFRESH_TOKEN_TTL: data.REFRESH_TOKEN_TTL,
+    PASSWORD_RESET_TOKEN_TTL: data.PASSWORD_RESET_TOKEN_TTL,
+    PASSWORD_RESET_DELIVERY_MODE: passwordResetDeliveryMode,
   };
 }
 
@@ -120,6 +140,12 @@ export function readEnvironment(
     ),
     ACCESS_TOKEN_TTL: configService.getOrThrow<number>('ACCESS_TOKEN_TTL'),
     REFRESH_TOKEN_TTL: configService.getOrThrow<number>('REFRESH_TOKEN_TTL'),
+    PASSWORD_RESET_TOKEN_TTL: configService.getOrThrow<number>(
+      'PASSWORD_RESET_TOKEN_TTL',
+    ),
+    PASSWORD_RESET_DELIVERY_MODE: configService.getOrThrow<
+      'local' | 'disabled'
+    >('PASSWORD_RESET_DELIVERY_MODE'),
   };
 }
 

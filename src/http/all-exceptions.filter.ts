@@ -9,6 +9,10 @@ import { Request, Response } from 'express';
 import { StructuredLoggerService } from '../observability/structured-logger.service';
 import { getRequestId, RequestWithId } from './request-id';
 import { AuthenticationRejectedError } from '../auth/domain/authentication-rejected.error';
+import {
+  InvalidPasswordResetTokenError,
+  PasswordResetDeliveryUnavailableError,
+} from '../auth/domain/password-reset.errors';
 
 export interface ProblemDetails {
   type: string;
@@ -79,6 +83,24 @@ function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
       title: 'Falha na autenticação',
       detail: 'E-mail, senha ou sessão inválidos.',
       code: 'INVALID_CREDENTIALS',
+    };
+  }
+
+  if (exception instanceof InvalidPasswordResetTokenError) {
+    return {
+      type: 'https://ciclera.com.br/problems/invalid-password-reset-token',
+      title: 'Redefinição não permitida',
+      detail: 'O token de redefinição é inválido ou expirou.',
+      code: 'INVALID_PASSWORD_RESET_TOKEN',
+    };
+  }
+
+  if (exception instanceof PasswordResetDeliveryUnavailableError) {
+    return {
+      type: 'https://ciclera.com.br/problems/password-reset-unavailable',
+      title: 'Recuperação indisponível',
+      detail: 'Não foi possível enviar as instruções de recuperação.',
+      code: 'PASSWORD_RESET_UNAVAILABLE',
     };
   }
 
@@ -190,6 +212,14 @@ function getProblemDefaults(status: number): ProblemDefaults {
 function getHttpStatus(exception: unknown): number {
   if (exception instanceof AuthenticationRejectedError) {
     return HttpStatus.UNAUTHORIZED;
+  }
+
+  if (exception instanceof InvalidPasswordResetTokenError) {
+    return HttpStatus.BAD_REQUEST;
+  }
+
+  if (exception instanceof PasswordResetDeliveryUnavailableError) {
+    return HttpStatus.SERVICE_UNAVAILABLE;
   }
 
   if (exception instanceof HttpException) {

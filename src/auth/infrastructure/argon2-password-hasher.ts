@@ -18,6 +18,10 @@ export class Argon2PasswordHasher implements PasswordHasher, OnModuleInit {
     await this.dummyHash;
   }
 
+  hash(password: string): Promise<string> {
+    return hash(password, argon2Options);
+  }
+
   async verify(passwordHash: string, password: string): Promise<boolean> {
     try {
       return await verify(passwordHash, password);

@@ -12,6 +12,8 @@ import {
 } from '@nestjs/common';
 import {
   ApiCookieAuth,
+  ApiAcceptedResponse,
+  ApiBadRequestResponse,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
@@ -21,6 +23,7 @@ import {
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AuthService } from '../application/auth.service';
+import { PasswordResetService } from '../application/password-reset.service';
 import type { AuthenticatedPrincipal } from '../domain/authenticated-principal';
 import { AllowedOriginGuard } from './allowed-origin.guard';
 import {
@@ -32,6 +35,11 @@ import {
 import { AuthenticatedAccountResponseDto } from './auth-response.dto';
 import { CurrentPrincipal } from './current-principal.decorator';
 import { LoginRequestDto } from './login-request.dto';
+import {
+  ForgotPasswordAcceptedResponseDto,
+  ForgotPasswordRequestDto,
+  ResetPasswordRequestDto,
+} from './password-reset.dto';
 import { Public } from './public.decorator';
 
 @ApiTags('auth')
@@ -39,8 +47,50 @@ import { Public } from './public.decorator';
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
+    private readonly passwordResets: PasswordResetService,
     private readonly cookies: AuthCookieService,
   ) {}
+
+  @Post('forgot-password')
+  @Public()
+  @UseGuards(AllowedOriginGuard, ThrottlerGuard)
+  @Throttle({
+    ip: { limit: 50, ttl: 60_000 },
+    identifier: { limit: 10, ttl: 60_000 },
+  })
+  @HttpCode(HttpStatus.ACCEPTED)
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({
+    summary: 'Solicita recuperação de senha sem revelar contas.',
+  })
+  @ApiAcceptedResponse({ type: ForgotPasswordAcceptedResponseDto })
+  async forgotPassword(
+    @Body() input: ForgotPasswordRequestDto,
+  ): Promise<ForgotPasswordAcceptedResponseDto> {
+    await this.passwordResets.request(input.email);
+    return {
+      message:
+        'Se o e-mail estiver cadastrado, enviaremos as instruções de recuperação.',
+    };
+  }
+
+  @Post('reset-password')
+  @Public()
+  @UseGuards(AllowedOriginGuard, ThrottlerGuard)
+  @Throttle({
+    ip: { limit: 20, ttl: 60_000 },
+    identifier: { limit: 10, ttl: 60_000 },
+  })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({ summary: 'Redefine a senha com token de uso único.' })
+  @ApiNoContentResponse({
+    description: 'Senha redefinida e sessões revogadas.',
+  })
+  @ApiBadRequestResponse({ description: 'Token inválido ou expirado.' })
+  async resetPassword(@Body() input: ResetPasswordRequestDto): Promise<void> {
+    await this.passwordResets.reset(input.token, input.password);
+  }
 
   @Post('login')
   @Public()
