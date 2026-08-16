@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { authIdentifierTracker } from './auth/http/auth-rate-limit';
 import { validateEnvironment } from './config/environment';
 import { CustomersModule } from './customers/customers.module';
+import { ChecklistsModule } from './checklists/checklists.module';
 import { EquipmentModule } from './equipment/equipment.module';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './infrastructure/database/prisma/prisma.module';
@@ -32,6 +33,7 @@ import { WorkOrdersModule } from './work-orders/work-orders.module';
     AuthModule,
     UsersModule,
     CustomersModule,
+    ChecklistsModule,
     EquipmentModule,
     WorkOrdersModule,
     HealthModule,

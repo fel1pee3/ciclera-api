@@ -4,8 +4,15 @@ import { PrismaService } from '../../infrastructure/database/prisma/prisma.servi
 import type {
   TechnicianWorkOrderRepository,
   TechnicianWorkOrderView,
+  TechnicianWorkOrder,
 } from '../application/ports/technician-work-order.repository';
 import { transitionWorkOrderStatus } from '../domain/work-order-state-machine';
+import {
+  assertChecklistAnswers,
+  missingRequiredFieldIds,
+  type ChecklistAnswer,
+  type ChecklistSnapshot,
+} from '../../checklists/domain/checklist';
 
 const technicianWorkOrderSelect = {
   id: true,
@@ -42,6 +49,11 @@ const technicianWorkOrderSelect = {
       version: true,
       startedAt: true,
       updatedAt: true,
+      checklistSnapshot: true,
+      checklistResponses: {
+        select: { fieldId: true, value: true },
+        orderBy: { fieldId: 'asc' },
+      },
     },
   },
 } as const;
@@ -77,7 +89,7 @@ export class PrismaTechnicianWorkOrderRepository implements TechnicianWorkOrderR
       this.prisma.workOrder.count({ where }),
     ]);
     return {
-      items,
+      items: items.map(mapTechnicianWorkOrder),
       total,
       page: input.page,
       pageSize: input.pageSize,
@@ -85,8 +97,12 @@ export class PrismaTechnicianWorkOrderRepository implements TechnicianWorkOrderR
     };
   }
 
-  find(organizationId: string, technicianId: string, workOrderId: string) {
-    return this.prisma.workOrder.findFirst({
+  async find(
+    organizationId: string,
+    technicianId: string,
+    workOrderId: string,
+  ) {
+    const workOrder = await this.prisma.workOrder.findFirst({
       where: {
         id: workOrderId,
         organizationId,
@@ -94,6 +110,7 @@ export class PrismaTechnicianWorkOrderRepository implements TechnicianWorkOrderR
       },
       select: technicianWorkOrderSelect,
     });
+    return workOrder ? mapTechnicianWorkOrder(workOrder) : null;
   }
 
   startExecution(
@@ -125,6 +142,24 @@ export class PrismaTechnicianWorkOrderRepository implements TechnicianWorkOrderR
         }
         const nextStatus = transitionWorkOrderStatus(current.status, 'START');
         const now = new Date();
+        const checklistTemplate = await transaction.checklistTemplate.findFirst(
+          {
+            where: {
+              organizationId: input.organizationId,
+              templateKey: 'default',
+            },
+            orderBy: { version: 'desc' },
+            select: { id: true, name: true, version: true, fields: true },
+          },
+        );
+        const checklistSnapshot = checklistTemplate
+          ? {
+              templateId: checklistTemplate.id,
+              name: checklistTemplate.name,
+              version: checklistTemplate.version,
+              fields: checklistTemplate.fields,
+            }
+          : undefined;
         const updated = await transaction.workOrder.updateMany({
           where: {
             id: input.workOrderId,
@@ -147,6 +182,8 @@ export class PrismaTechnicianWorkOrderRepository implements TechnicianWorkOrderR
             workOrderId: input.workOrderId,
             technicianId: input.technicianId,
             startedAt: now,
+            checklistTemplateId: checklistTemplate?.id,
+            checklistSnapshot,
           },
         });
         await transaction.workOrderStatusHistory.create({
@@ -215,6 +252,81 @@ export class PrismaTechnicianWorkOrderRepository implements TechnicianWorkOrderR
         transaction,
         input,
         'WORK_ORDER_EXECUTION_UPDATED',
+      );
+      return { status: 'SUCCESS' } as const;
+    }, executionTransactionOptions);
+  }
+
+  updateChecklist(
+    input: Parameters<TechnicianWorkOrderRepository['updateChecklist']>[0],
+  ) {
+    return this.prisma.$transaction(async (transaction) => {
+      const current = await transaction.workOrder.findFirst({
+        where: {
+          id: input.workOrderId,
+          organizationId: input.organizationId,
+          assignments: {
+            some: { technicianId: input.technicianId, unassignedAt: null },
+          },
+        },
+        select: {
+          status: true,
+          execution: {
+            select: { id: true, version: true, checklistSnapshot: true },
+          },
+        },
+      });
+      if (!current) return { status: 'NOT_FOUND' } as const;
+      if (current.status !== 'IN_PROGRESS') {
+        return { status: 'STATUS_LOCKED' } as const;
+      }
+      if (!current.execution) return { status: 'EXECUTION_NOT_FOUND' } as const;
+      if (current.execution.version !== input.expectedVersion) {
+        return { status: 'VERSION_CONFLICT' } as const;
+      }
+      if (!current.execution.checklistSnapshot) {
+        return { status: 'INVALID_CHECKLIST_RESPONSE' } as const;
+      }
+      try {
+        assertChecklistAnswers(
+          current.execution.checklistSnapshot as unknown as ChecklistSnapshot,
+          input.responses,
+        );
+      } catch {
+        return { status: 'INVALID_CHECKLIST_RESPONSE' } as const;
+      }
+      const updated = await transaction.workOrderExecution.updateMany({
+        where: {
+          id: current.execution.id,
+          organizationId: input.organizationId,
+          technicianId: input.technicianId,
+          version: input.expectedVersion,
+        },
+        data: { version: { increment: 1 } },
+      });
+      if (updated.count !== 1) return { status: 'VERSION_CONFLICT' } as const;
+      for (const response of input.responses) {
+        await transaction.checklistResponse.upsert({
+          where: {
+            organizationId_executionId_fieldId: {
+              organizationId: input.organizationId,
+              executionId: current.execution.id,
+              fieldId: response.fieldId,
+            },
+          },
+          create: {
+            organizationId: input.organizationId,
+            executionId: current.execution.id,
+            fieldId: response.fieldId,
+            value: response.value,
+          },
+          update: { value: response.value },
+        });
+      }
+      await writeExecutionAudit(
+        transaction,
+        input,
+        'WORK_ORDER_CHECKLIST_UPDATED',
       );
       return { status: 'SUCCESS' } as const;
     }, executionTransactionOptions);
@@ -327,4 +439,35 @@ function zonedMidnightToUtc(date: string, timezone: string): Date {
     instant += Date.UTC(year, month - 1, day) - rendered;
   }
   return new Date(instant);
+}
+
+function mapTechnicianWorkOrder(
+  workOrder: Prisma.WorkOrderGetPayload<{
+    select: typeof technicianWorkOrderSelect;
+  }>,
+): TechnicianWorkOrder {
+  if (!workOrder.execution) return { ...workOrder, execution: null };
+  const { checklistSnapshot, checklistResponses, ...execution } =
+    workOrder.execution;
+  const snapshot = checklistSnapshot as unknown as ChecklistSnapshot | null;
+  const responses = checklistResponses.map((response) => ({
+    fieldId: response.fieldId,
+    value: response.value as ChecklistAnswer['value'],
+  }));
+  return {
+    ...workOrder,
+    execution: {
+      ...execution,
+      checklist: snapshot
+        ? {
+            snapshot,
+            responses,
+            missingRequiredFieldIds: missingRequiredFieldIds(
+              snapshot,
+              responses,
+            ),
+          }
+        : null,
+    },
+  };
 }

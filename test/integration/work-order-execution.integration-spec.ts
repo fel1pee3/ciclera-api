@@ -1,6 +1,7 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
 import { AppModule } from '../../src/app.module';
+import { ChecklistTemplatesService } from '../../src/checklists/application/checklist-templates.service';
 import type { AuthenticatedPrincipal } from '../../src/auth/domain/authenticated-principal';
 import { PrismaService } from '../../src/infrastructure/database/prisma/prisma.service';
 import { TechnicianWorkOrdersService } from '../../src/work-orders/application/technician-work-orders.service';
@@ -9,6 +10,7 @@ import {
   WorkOrderExecutionAlreadyStartedError,
   WorkOrderNotFoundError,
   WorkOrderVersionConflictError,
+  ChecklistResponseInvalidError,
 } from '../../src/work-orders/domain/work-order.errors';
 
 describe('Work order execution draft', () => {
@@ -16,6 +18,7 @@ describe('Work order execution draft', () => {
   let prisma: PrismaService;
   let managerService: WorkOrdersService;
   let fieldService: TechnicianWorkOrdersService;
+  let checklistService: ChecklistTemplatesService;
   let organizationId: string;
   let owner: AuthenticatedPrincipal;
   let technician: AuthenticatedPrincipal;
@@ -29,6 +32,7 @@ describe('Work order execution draft', () => {
     prisma = moduleRef.get(PrismaService);
     managerService = moduleRef.get(WorkOrdersService);
     fieldService = moduleRef.get(TechnicianWorkOrdersService);
+    checklistService = moduleRef.get(ChecklistTemplatesService);
     await assertTestDatabase(prisma);
     const suffix = `${Date.now()}-${process.pid}`;
     const organization = await prisma.organization.create({
@@ -58,7 +62,9 @@ describe('Work order execution draft', () => {
 
   afterAll(async () => {
     if (organizationId) {
+      await prisma.checklistResponse.deleteMany({ where: { organizationId } });
       await prisma.workOrderExecution.deleteMany({ where: { organizationId } });
+      await prisma.checklistTemplate.deleteMany({ where: { organizationId } });
       await prisma.workOrderAssignment.deleteMany({
         where: { organizationId },
       });
@@ -187,6 +193,90 @@ describe('Work order execution draft', () => {
         current.version,
       ),
     ).rejects.toBeInstanceOf(WorkOrderExecutionAlreadyStartedError);
+  });
+
+  it('snapshots the template and validates partial responses against that version', async () => {
+    const firstTemplate = await checklistService.createVersion(
+      owner,
+      'checklist-v1',
+      {
+        name: 'Checklist preventivo',
+        fields: [
+          {
+            id: 'diagnosis',
+            label: 'Diagnóstico',
+            type: 'SHORT_TEXT',
+            required: true,
+          },
+          {
+            id: 'operating',
+            label: 'Equipamento operando',
+            type: 'BOOLEAN',
+            required: false,
+          },
+        ],
+      },
+    );
+    const scheduled = await createScheduled('checklist');
+    const started = await fieldService.start(
+      technician,
+      'checklist-start',
+      scheduled.id,
+      scheduled.version,
+    );
+    expect(started.execution?.checklist).toMatchObject({
+      snapshot: { templateId: firstTemplate.id, version: 1 },
+      responses: [],
+      missingRequiredFieldIds: ['diagnosis'],
+    });
+
+    await checklistService.createVersion(owner, 'checklist-v2', {
+      name: 'Checklist preventivo revisado',
+      fields: [
+        {
+          id: 'pressure',
+          label: 'Pressão',
+          type: 'NUMBER',
+          required: true,
+        },
+      ],
+    });
+    const historical = await fieldService.find(technician, scheduled.id);
+    expect(historical.execution?.checklist?.snapshot).toMatchObject({
+      templateId: firstTemplate.id,
+      version: 1,
+    });
+
+    await expect(
+      fieldService.updateChecklist(
+        technician,
+        'checklist-invalid',
+        scheduled.id,
+        started.execution?.version ?? 0,
+        [{ fieldId: 'operating', value: 'sim' }],
+      ),
+    ).rejects.toBeInstanceOf(ChecklistResponseInvalidError);
+
+    const saved = await fieldService.updateChecklist(
+      technician,
+      'checklist-save',
+      scheduled.id,
+      started.execution?.version ?? 0,
+      [{ fieldId: 'diagnosis', value: 'Sistema normalizado' }],
+    );
+    expect(saved.execution?.checklist).toMatchObject({
+      responses: [{ fieldId: 'diagnosis', value: 'Sistema normalizado' }],
+      missingRequiredFieldIds: [],
+    });
+    await expect(
+      fieldService.updateChecklist(
+        technician,
+        'checklist-stale',
+        scheduled.id,
+        started.execution?.version ?? 0,
+        [{ fieldId: 'diagnosis', value: 'Sobrescrita' }],
+      ),
+    ).rejects.toBeInstanceOf(WorkOrderVersionConflictError);
   });
 
   async function createScheduled(label: string) {

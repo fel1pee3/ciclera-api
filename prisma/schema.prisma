@@ -60,6 +60,8 @@ model Organization {
   workOrderStatusHistory WorkOrderStatusHistory[]
   workOrderAssignments   WorkOrderAssignment[]
   workOrderExecutions    WorkOrderExecution[]
+  checklistTemplates     ChecklistTemplate[]
+  checklistResponses     ChecklistResponse[]
   workOrderCounter       WorkOrderCounter?
   createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -158,28 +160,29 @@ model Equipment {
 }
 
 model User {
-  id                     String                   @id @default(uuid()) @db.Uuid
-  organizationId         String                   @map("organization_id") @db.Uuid
-  organization           Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  name                   String                   @db.VarChar(160)
-  email                  String                   @db.VarChar(320)
-  normalizedEmail        String                   @unique @map("normalized_email") @db.VarChar(320)
-  passwordHash           String                   @map("password_hash") @db.VarChar(255)
-  role                   UserRole                 @default(TECHNICIAN)
-  status                 UserStatus               @default(ACTIVE)
-  lastLoginAt            DateTime?                @map("last_login_at") @db.Timestamptz(6)
-  sessions               Session[]
-  passwordResetTokens    PasswordResetToken[]
-  auditLogs              AuditLog[]               @relation("AuditActor")
-  createdWorkOrders      WorkOrder[]              @relation("WorkOrderCreator")
-  canceledWorkOrders     WorkOrder[]              @relation("WorkOrderCanceler")
-  workOrderStatusChanges WorkOrderStatusHistory[] @relation("WorkOrderStatusActor")
-  assignedWorkOrders     WorkOrderAssignment[]    @relation("WorkOrderTechnician")
-  createdAssignments     WorkOrderAssignment[]    @relation("WorkOrderAssignmentCreator")
-  closedAssignments      WorkOrderAssignment[]    @relation("WorkOrderAssignmentCloser")
-  workOrderExecutions    WorkOrderExecution[]     @relation("WorkOrderExecutionTechnician")
-  createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                        String                   @id @default(uuid()) @db.Uuid
+  organizationId            String                   @map("organization_id") @db.Uuid
+  organization              Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  name                      String                   @db.VarChar(160)
+  email                     String                   @db.VarChar(320)
+  normalizedEmail           String                   @unique @map("normalized_email") @db.VarChar(320)
+  passwordHash              String                   @map("password_hash") @db.VarChar(255)
+  role                      UserRole                 @default(TECHNICIAN)
+  status                    UserStatus               @default(ACTIVE)
+  lastLoginAt               DateTime?                @map("last_login_at") @db.Timestamptz(6)
+  sessions                  Session[]
+  passwordResetTokens       PasswordResetToken[]
+  auditLogs                 AuditLog[]               @relation("AuditActor")
+  createdWorkOrders         WorkOrder[]              @relation("WorkOrderCreator")
+  canceledWorkOrders        WorkOrder[]              @relation("WorkOrderCanceler")
+  workOrderStatusChanges    WorkOrderStatusHistory[] @relation("WorkOrderStatusActor")
+  assignedWorkOrders        WorkOrderAssignment[]    @relation("WorkOrderTechnician")
+  createdAssignments        WorkOrderAssignment[]    @relation("WorkOrderAssignmentCreator")
+  closedAssignments         WorkOrderAssignment[]    @relation("WorkOrderAssignmentCloser")
+  workOrderExecutions       WorkOrderExecution[]     @relation("WorkOrderExecutionTechnician")
+  createdChecklistTemplates ChecklistTemplate[]      @relation("ChecklistTemplateCreator")
+  createdAt                 DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([organizationId, id])
   @@index([organizationId, status, role])
@@ -241,19 +244,19 @@ model WorkOrder {
 }
 
 model WorkOrderAssignment {
-  id                     String       @id @default(uuid()) @db.Uuid
-  organizationId         String       @map("organization_id") @db.Uuid
-  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  workOrderId            String       @map("work_order_id") @db.Uuid
-  workOrder              WorkOrder    @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
-  technicianId           String       @map("technician_id") @db.Uuid
-  technician             User         @relation("WorkOrderTechnician", fields: [organizationId, technicianId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
-  assignedByUserId       String       @map("assigned_by_user_id") @db.Uuid
-  assignedBy             User         @relation("WorkOrderAssignmentCreator", fields: [organizationId, assignedByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
-  assignedAt             DateTime     @default(now()) @map("assigned_at") @db.Timestamptz(6)
-  unassignedByUserId     String?      @map("unassigned_by_user_id") @db.Uuid
-  unassignedBy           User?        @relation("WorkOrderAssignmentCloser", fields: [organizationId, unassignedByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
-  unassignedAt           DateTime?    @map("unassigned_at") @db.Timestamptz(6)
+  id                 String       @id @default(uuid()) @db.Uuid
+  organizationId     String       @map("organization_id") @db.Uuid
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrderId        String       @map("work_order_id") @db.Uuid
+  workOrder          WorkOrder    @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  technicianId       String       @map("technician_id") @db.Uuid
+  technician         User         @relation("WorkOrderTechnician", fields: [organizationId, technicianId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  assignedByUserId   String       @map("assigned_by_user_id") @db.Uuid
+  assignedBy         User         @relation("WorkOrderAssignmentCreator", fields: [organizationId, assignedByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  assignedAt         DateTime     @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  unassignedByUserId String?      @map("unassigned_by_user_id") @db.Uuid
+  unassignedBy       User?        @relation("WorkOrderAssignmentCloser", fields: [organizationId, unassignedByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  unassignedAt       DateTime?    @map("unassigned_at") @db.Timestamptz(6)
 
   @@unique([organizationId, id])
   @@index([organizationId, workOrderId, assignedAt, id])
@@ -262,23 +265,63 @@ model WorkOrderAssignment {
 }
 
 model WorkOrderExecution {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @map("organization_id") @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  workOrderId    String       @map("work_order_id") @db.Uuid
-  workOrder      WorkOrder    @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
-  technicianId   String       @map("technician_id") @db.Uuid
-  technician     User         @relation("WorkOrderExecutionTechnician", fields: [organizationId, technicianId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
-  notes          String?      @db.VarChar(4000)
-  version        Int          @default(1)
-  startedAt      DateTime     @default(now()) @map("started_at") @db.Timestamptz(6)
-  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                  String              @id @default(uuid()) @db.Uuid
+  organizationId      String              @map("organization_id") @db.Uuid
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrderId         String              @map("work_order_id") @db.Uuid
+  workOrder           WorkOrder           @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  technicianId        String              @map("technician_id") @db.Uuid
+  technician          User                @relation("WorkOrderExecutionTechnician", fields: [organizationId, technicianId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  notes               String?             @db.VarChar(4000)
+  checklistTemplateId String?             @map("checklist_template_id") @db.Uuid
+  checklistTemplate   ChecklistTemplate?  @relation(fields: [organizationId, checklistTemplateId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  checklistSnapshot   Json?               @map("checklist_snapshot")
+  checklistResponses  ChecklistResponse[]
+  version             Int                 @default(1)
+  startedAt           DateTime            @default(now()) @map("started_at") @db.Timestamptz(6)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([organizationId, id])
   @@unique([organizationId, workOrderId])
   @@index([organizationId, technicianId, updatedAt(sort: Desc), id])
   @@map("work_order_executions")
+}
+
+model ChecklistTemplate {
+  id              String               @id @default(uuid()) @db.Uuid
+  organizationId  String               @map("organization_id") @db.Uuid
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  templateKey     String               @default("default") @map("template_key") @db.VarChar(80)
+  name            String               @db.VarChar(160)
+  version         Int
+  fields          Json
+  createdByUserId String               @map("created_by_user_id") @db.Uuid
+  createdBy       User                 @relation("ChecklistTemplateCreator", fields: [organizationId, createdByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  executions      WorkOrderExecution[]
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, templateKey, version])
+  @@index([organizationId, templateKey, version(sort: Desc)])
+  @@map("checklist_templates")
+}
+
+model ChecklistResponse {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  executionId    String             @map("execution_id") @db.Uuid
+  execution      WorkOrderExecution @relation(fields: [organizationId, executionId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  fieldId        String             @map("field_id") @db.VarChar(80)
+  value          Json
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, executionId, fieldId])
+  @@index([organizationId, executionId, updatedAt])
+  @@map("checklist_responses")
 }
 
 model WorkOrderStatusHistory {

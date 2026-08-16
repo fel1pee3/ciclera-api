@@ -44,7 +44,9 @@ import {
   WorkOrderStatusLockedError,
   WorkOrderTechnicianInvalidError,
   WorkOrderVersionConflictError,
+  ChecklistResponseInvalidError,
 } from '../work-orders/domain/work-order.errors';
+import { ChecklistDefinitionInvalidError } from '../checklists/domain/checklist.errors';
 
 export interface ProblemDetails {
   type: string;
@@ -352,6 +354,25 @@ function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
     };
   }
 
+  if (exception instanceof ChecklistDefinitionInvalidError) {
+    return {
+      type: 'https://ciclera.com.br/problems/checklist-definition-invalid',
+      title: 'Checklist inválido',
+      detail: 'Revise os campos e opções do checklist.',
+      code: 'CHECKLIST_DEFINITION_INVALID',
+    };
+  }
+
+  if (exception instanceof ChecklistResponseInvalidError) {
+    return {
+      type: 'https://ciclera.com.br/problems/checklist-response-invalid',
+      title: 'Resposta incompatível',
+      detail:
+        'Uma ou mais respostas não correspondem ao checklist desta execução.',
+      code: 'CHECKLIST_RESPONSE_INVALID',
+    };
+  }
+
   if (!(exception instanceof HttpException)) {
     return {};
   }
@@ -544,6 +565,13 @@ function getHttpStatus(exception: unknown): number {
   }
 
   if (exception instanceof WorkOrderScheduleInvalidError) {
+    return HttpStatus.UNPROCESSABLE_ENTITY;
+  }
+
+  if (
+    exception instanceof ChecklistDefinitionInvalidError ||
+    exception instanceof ChecklistResponseInvalidError
+  ) {
     return HttpStatus.UNPROCESSABLE_ENTITY;
   }
 

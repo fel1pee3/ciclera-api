@@ -2,6 +2,10 @@ import type {
   WorkOrderPriority,
   WorkOrderStatus,
 } from '../../domain/work-order';
+import type {
+  ChecklistAnswer,
+  ChecklistSnapshot,
+} from '../../../checklists/domain/checklist';
 
 export const TECHNICIAN_WORK_ORDER_REPOSITORY = Symbol(
   'TECHNICIAN_WORK_ORDER_REPOSITORY',
@@ -50,6 +54,11 @@ export interface WorkOrderExecution {
   version: number;
   startedAt: Date;
   updatedAt: Date;
+  checklist: {
+    snapshot: ChecklistSnapshot;
+    responses: ChecklistAnswer[];
+    missingRequiredFieldIds: string[];
+  } | null;
 }
 
 export type TechnicianExecutionMutationResult =
@@ -58,7 +67,8 @@ export type TechnicianExecutionMutationResult =
   | { status: 'STATUS_LOCKED' }
   | { status: 'VERSION_CONFLICT' }
   | { status: 'EXECUTION_EXISTS' }
-  | { status: 'EXECUTION_NOT_FOUND' };
+  | { status: 'EXECUTION_NOT_FOUND' }
+  | { status: 'INVALID_CHECKLIST_RESPONSE' };
 
 export interface TechnicianWorkOrderRepository {
   list(input: {
@@ -92,6 +102,14 @@ export interface TechnicianWorkOrderRepository {
     workOrderId: string;
     expectedVersion: number;
     notes: string | null;
+    requestId: string;
+  }): Promise<TechnicianExecutionMutationResult>;
+  updateChecklist(input: {
+    organizationId: string;
+    technicianId: string;
+    workOrderId: string;
+    expectedVersion: number;
+    responses: ChecklistAnswer[];
     requestId: string;
   }): Promise<TechnicianExecutionMutationResult>;
 }

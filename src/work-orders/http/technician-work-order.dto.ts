@@ -5,6 +5,9 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsDefined,
+  ValidateNested,
+  ArrayMaxSize,
   Max,
   MaxLength,
   Min,
@@ -92,6 +95,25 @@ export class WorkOrderExecutionResponseDto {
   @ApiProperty() version!: number;
   @ApiProperty({ format: 'date-time' }) startedAt!: Date;
   @ApiProperty({ format: 'date-time' }) updatedAt!: Date;
+  @ApiProperty({ nullable: true }) checklist!: unknown;
+}
+
+export class ChecklistAnswerDto {
+  @ApiProperty() @IsString() @MaxLength(80) fieldId!: string;
+  @ApiProperty({
+    oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }],
+  })
+  @IsDefined()
+  value!: string | number | boolean;
+}
+
+export class UpdateWorkOrderChecklistDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) version!: number;
+  @ApiProperty({ type: [ChecklistAnswerDto] })
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => ChecklistAnswerDto)
+  responses!: ChecklistAnswerDto[];
 }
 
 export class StartWorkOrderExecutionDto {

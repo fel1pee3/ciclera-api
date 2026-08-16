@@ -150,6 +150,11 @@ class TestTechnicianRepository implements TechnicianWorkOrderRepository {
     };
     return Promise.resolve({ status: 'SUCCESS' });
   }
+  updateChecklist(): ReturnType<
+    TechnicianWorkOrderRepository['updateChecklist']
+  > {
+    return Promise.resolve({ status: 'SUCCESS' });
+  }
 }
 
 const now = new Date('2026-08-16T12:00:00.000Z');
@@ -187,6 +192,7 @@ const execution = {
   version: 1,
   startedAt: now,
   updatedAt: now,
+  checklist: null,
 };
 const session: ResolvedSession = {
   sessionId: '30000000-0000-4000-8000-000000000001',

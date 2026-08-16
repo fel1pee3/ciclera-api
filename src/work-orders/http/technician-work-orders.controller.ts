@@ -31,6 +31,7 @@ import {
   TechnicianWorkOrderResponseDto,
   StartWorkOrderExecutionDto,
   UpdateWorkOrderExecutionDto,
+  UpdateWorkOrderChecklistDto,
 } from './technician-work-order.dto';
 
 @ApiTags('field-work-orders')
@@ -98,6 +99,26 @@ export class TechnicianWorkOrdersController {
         workOrderId,
         input.version,
         input.notes,
+      ),
+    );
+  }
+
+  @Patch(':workOrderId/execution/checklist')
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ type: TechnicianWorkOrderResponseDto })
+  async updateChecklist(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Req() request: RequestWithId,
+    @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
+    @Body() input: UpdateWorkOrderChecklistDto,
+  ): Promise<TechnicianWorkOrderResponseDto> {
+    return toResponse(
+      await this.workOrders.updateChecklist(
+        principal,
+        getRequestId(request),
+        workOrderId,
+        input.version,
+        input.responses,
       ),
     );
   }

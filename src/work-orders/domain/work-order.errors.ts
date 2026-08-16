@@ -8,3 +8,4 @@ export class WorkOrderTechnicianInvalidError extends Error {}
 export class WorkOrderAssignmentInvalidError extends Error {}
 export class WorkOrderExecutionAlreadyStartedError extends Error {}
 export class WorkOrderExecutionNotFoundError extends Error {}
+export class ChecklistResponseInvalidError extends Error {}
