@@ -1186,6 +1186,16 @@ GET   /api/v1/schedule
 
 Edição genérica deve ser bloqueada ou limitada depois que a execução iniciar. Campos críticos precisam de comandos específicos ou regras explícitas.
 
+No CRUD inicial estão ativos `GET/POST /work-orders`, `GET/PATCH
+/work-orders/:workOrderId` e `POST /work-orders/:workOrderId/cancel`. Criação
+sempre produz `DRAFT`; o `PATCH` exige `version`, não aceita `status` e altera
+somente campos do rascunho. O cancelamento exige motivo e usa a ação semântica da
+state machine. Valores monetários entram e saem como strings decimais de centavos,
+e o detalhe retorna o histórico real em ordem cronológica. Busca, filtros,
+paginação e ordenações pertencem a uma allowlist. Rotas de agendamento,
+atribuição e execução listadas adiante permanecem planejadas para checkpoints
+posteriores e ainda não estão expostas.
+
 ### Execução
 
 ```text

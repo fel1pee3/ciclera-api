@@ -39,6 +39,19 @@ export interface WorkOrder {
   updatedAt: Date;
 }
 
+export interface WorkOrderStatusHistoryEntry {
+  id: string;
+  previousStatus: WorkOrderStatus | null;
+  newStatus: WorkOrderStatus;
+  actorUserId: string;
+  reason: string | null;
+  createdAt: Date;
+}
+
+export interface WorkOrderDetails extends WorkOrder {
+  history: WorkOrderStatusHistoryEntry[];
+}
+
 export function formatWorkOrderNumber(number: bigint): string {
   if (number <= 0n) throw new InvalidWorkOrderNumberError();
   return `OS-${number.toString().padStart(6, '0')}`;

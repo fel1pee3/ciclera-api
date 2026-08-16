@@ -33,6 +33,14 @@ import {
   EquipmentRelationInvalidError,
   EquipmentSerialConflictError,
 } from '../equipment/domain/equipment.errors';
+import {
+  WorkOrderManagementForbiddenError,
+  WorkOrderNotFoundError,
+  WorkOrderRelationInvalidError,
+  WorkOrderScheduleInvalidError,
+  WorkOrderStatusLockedError,
+  WorkOrderVersionConflictError,
+} from '../work-orders/domain/work-order.errors';
 
 export interface ProblemDetails {
   type: string;
@@ -250,6 +258,60 @@ function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
     };
   }
 
+  if (exception instanceof WorkOrderNotFoundError) {
+    return {
+      type: 'https://ciclera.com.br/problems/work-order-not-found',
+      title: 'Ordem não encontrada',
+      detail: 'A ordem de serviço solicitada não foi encontrada.',
+      code: 'WORK_ORDER_NOT_FOUND',
+    };
+  }
+
+  if (exception instanceof WorkOrderRelationInvalidError) {
+    return {
+      type: 'https://ciclera.com.br/problems/work-order-relation-invalid',
+      title: 'Vínculo inválido',
+      detail: 'Cliente, local e equipamento devem pertencer ao mesmo tenant.',
+      code: 'WORK_ORDER_RELATION_INVALID',
+    };
+  }
+
+  if (exception instanceof WorkOrderStatusLockedError) {
+    return {
+      type: 'https://ciclera.com.br/problems/work-order-status-locked',
+      title: 'Ordem não editável',
+      detail: 'O status atual não permite alterar estes campos.',
+      code: 'WORK_ORDER_STATUS_LOCKED',
+    };
+  }
+
+  if (exception instanceof WorkOrderVersionConflictError) {
+    return {
+      type: 'https://ciclera.com.br/problems/work-order-version-conflict',
+      title: 'Ordem atualizada',
+      detail: 'A ordem foi alterada por outra operação. Recarregue os dados.',
+      code: 'WORK_ORDER_VERSION_CONFLICT',
+    };
+  }
+
+  if (exception instanceof WorkOrderManagementForbiddenError) {
+    return {
+      type: 'https://ciclera.com.br/problems/work-order-management-forbidden',
+      title: 'Acesso negado',
+      detail: 'Seu perfil não pode administrar ordens de serviço.',
+      code: 'WORK_ORDER_MANAGEMENT_FORBIDDEN',
+    };
+  }
+
+  if (exception instanceof WorkOrderScheduleInvalidError) {
+    return {
+      type: 'https://ciclera.com.br/problems/work-order-schedule-invalid',
+      title: 'Período inválido',
+      detail: 'A data final deve ser posterior à data inicial.',
+      code: 'WORK_ORDER_SCHEDULE_INVALID',
+    };
+  }
+
   if (!(exception instanceof HttpException)) {
     return {};
   }
@@ -419,6 +481,26 @@ function getHttpStatus(exception: unknown): number {
 
   if (exception instanceof EquipmentManagementForbiddenError) {
     return HttpStatus.FORBIDDEN;
+  }
+
+  if (exception instanceof WorkOrderNotFoundError) {
+    return HttpStatus.NOT_FOUND;
+  }
+
+  if (
+    exception instanceof WorkOrderRelationInvalidError ||
+    exception instanceof WorkOrderStatusLockedError ||
+    exception instanceof WorkOrderVersionConflictError
+  ) {
+    return HttpStatus.CONFLICT;
+  }
+
+  if (exception instanceof WorkOrderManagementForbiddenError) {
+    return HttpStatus.FORBIDDEN;
+  }
+
+  if (exception instanceof WorkOrderScheduleInvalidError) {
+    return HttpStatus.UNPROCESSABLE_ENTITY;
   }
 
   if (exception instanceof HttpException) {

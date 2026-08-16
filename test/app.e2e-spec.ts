@@ -223,6 +223,13 @@ describe('API foundation (e2e)', () => {
     expect(documentBody.paths).toHaveProperty('/api/v1/auth/logout-all');
     expect(documentBody.paths).toHaveProperty('/api/v1/auth/forgot-password');
     expect(documentBody.paths).toHaveProperty('/api/v1/auth/reset-password');
+    expect(documentBody.paths).toHaveProperty('/api/v1/work-orders');
+    expect(documentBody.paths).toHaveProperty(
+      '/api/v1/work-orders/{workOrderId}',
+    );
+    expect(documentBody.paths).toHaveProperty(
+      '/api/v1/work-orders/{workOrderId}/cancel',
+    );
 
     await request(nonDevelopmentApp.getHttpServer())
       .get('/docs-json')
