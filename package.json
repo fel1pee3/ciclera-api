@@ -30,6 +30,7 @@
     "db:seed:test": "node --env-file=.env scripts/run-database-seed.mjs test",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
+    "staging:check": "node scripts/check-staging-smoke.mjs",
     "postinstall": "prisma generate",
     "test": "jest",
     "test:integration": "node --env-file=.env scripts/run-integration-tests.mjs",

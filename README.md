@@ -1857,6 +1857,9 @@ Nunca enviar senha, token, cookie, documento completo, evidência ou payload sen
 
 Provedor específico deve ser documentado somente após escolha real.
 
+O procedimento provider-neutral e os critérios de evidência para staging estão
+em [`docs/STAGING_RUNBOOK.md`](docs/STAGING_RUNBOOK.md).
+
 O bootstrap falha fechado com `NODE_ENV=production` enquanto os únicos adapters
 disponíveis forem `EVIDENCE_STORAGE_DRIVER=local` e
 `RATE_LIMIT_STORAGE_DRIVER=memory`. Um deploy real precisa fornecer object
