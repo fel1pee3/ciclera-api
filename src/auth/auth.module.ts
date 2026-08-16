@@ -22,6 +22,7 @@ import { AllowedOriginGuard } from './http/allowed-origin.guard';
 import { AuthController } from './http/auth.controller';
 import { AuthCookieService } from './http/auth-cookies';
 import { AuthenticationGuard } from './http/authentication.guard';
+import { CookieCsrfGuard } from './http/cookie-csrf.guard';
 import { RolesGuard } from './http/roles.guard';
 import { Argon2PasswordHasher } from './infrastructure/argon2-password-hasher';
 import { DatabaseSessionResolver } from './infrastructure/database-session-resolver';
@@ -60,7 +61,12 @@ import { readEnvironment } from '../config/environment';
       }),
     },
     AuthenticationGuard,
+    CookieCsrfGuard,
     RolesGuard,
+    {
+      provide: APP_GUARD,
+      useExisting: CookieCsrfGuard,
+    },
     {
       provide: APP_GUARD,
       useExisting: AuthenticationGuard,

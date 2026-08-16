@@ -164,6 +164,26 @@ describe('API foundation (e2e)', () => {
     expect(response.headers).not.toHaveProperty('access-control-allow-origin');
   });
 
+  it('rejects cookie-authenticated mutations without an allowlisted Origin', async () => {
+    const missingOrigin = await request(developmentApp.getHttpServer())
+      .post('/api/v1/test-only/validation')
+      .set('Cookie', 'ciclera_access=opaque-test-cookie')
+      .send({ name: 'Ciclera' })
+      .expect(403);
+    const allowed = await request(developmentApp.getHttpServer())
+      .post('/api/v1/test-only/validation')
+      .set('Cookie', 'ciclera_access=opaque-test-cookie')
+      .set('Origin', 'http://localhost:3000')
+      .send({ name: 'Ciclera' })
+      .expect(201);
+
+    expect(missingOrigin.body).toMatchObject({
+      code: 'ORIGIN_NOT_ALLOWED',
+      requestId: missingOrigin.headers['x-request-id'],
+    });
+    expect(allowed.body).toEqual({ name: 'Ciclera' });
+  });
+
   it('rejects unexpected fields through the global ValidationPipe', async () => {
     const response = await request(developmentApp.getHttpServer())
       .post('/api/v1/test-only/validation')

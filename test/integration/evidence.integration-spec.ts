@@ -128,7 +128,7 @@ describe('Private evidence', () => {
       scheduled.id,
       scheduled.version,
     );
-    const content = Buffer.from('private-photo-content');
+    const content = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
     const created = await evidence.createIntent(
       technician,
       'evidence-intent',

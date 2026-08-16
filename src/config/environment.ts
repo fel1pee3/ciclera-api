@@ -35,6 +35,7 @@ const rawEnvironmentSchema = z.object({
     .max(24 * 60 * 60)
     .default(1_800),
   PASSWORD_RESET_DELIVERY_MODE: z.enum(['local', 'disabled']).optional(),
+  EVIDENCE_STORAGE_DRIVER: z.literal('local').default('local'),
   EVIDENCE_STORAGE_ROOT: z.string().min(1).default('.local/evidence'),
   UPLOAD_MAX_FILE_SIZE_BYTES: z.coerce
     .number()
@@ -53,6 +54,7 @@ const rawEnvironmentSchema = z.object({
     .max(50)
     .default(20),
   EVIDENCE_URL_TTL: z.coerce.number().int().min(60).max(900).default(300),
+  RATE_LIMIT_STORAGE_DRIVER: z.literal('memory').default('memory'),
 });
 
 export type NodeEnvironment = 'development' | 'test' | 'production';
@@ -74,11 +76,13 @@ export interface EnvironmentVariables {
   REFRESH_TOKEN_TTL: number;
   PASSWORD_RESET_TOKEN_TTL: number;
   PASSWORD_RESET_DELIVERY_MODE: 'local' | 'disabled';
+  EVIDENCE_STORAGE_DRIVER: 'local';
   EVIDENCE_STORAGE_ROOT: string;
   UPLOAD_MAX_FILE_SIZE_BYTES: number;
   UPLOAD_ALLOWED_MIME_TYPES: string[];
   UPLOAD_MAX_FILES_PER_EXECUTION: number;
   EVIDENCE_URL_TTL: number;
+  RATE_LIMIT_STORAGE_DRIVER: 'memory';
 }
 
 export function validateEnvironment(
@@ -121,6 +125,13 @@ export function validateEnvironment(
     );
   }
 
+  if (data.NODE_ENV === 'production') {
+    issues.push(
+      'EVIDENCE_STORAGE_DRIVER: local storage is forbidden in production',
+      'RATE_LIMIT_STORAGE_DRIVER: in-memory rate limiting is forbidden in production',
+    );
+  }
+
   if (issues.length > 0) {
     throwEnvironmentError(issues);
   }
@@ -141,6 +152,7 @@ export function validateEnvironment(
     REFRESH_TOKEN_TTL: data.REFRESH_TOKEN_TTL,
     PASSWORD_RESET_TOKEN_TTL: data.PASSWORD_RESET_TOKEN_TTL,
     PASSWORD_RESET_DELIVERY_MODE: passwordResetDeliveryMode,
+    EVIDENCE_STORAGE_DRIVER: data.EVIDENCE_STORAGE_DRIVER,
     EVIDENCE_STORAGE_ROOT: data.EVIDENCE_STORAGE_ROOT,
     UPLOAD_MAX_FILE_SIZE_BYTES: data.UPLOAD_MAX_FILE_SIZE_BYTES,
     UPLOAD_ALLOWED_MIME_TYPES: data.UPLOAD_ALLOWED_MIME_TYPES.split(',')
@@ -148,6 +160,7 @@ export function validateEnvironment(
       .filter(Boolean),
     UPLOAD_MAX_FILES_PER_EXECUTION: data.UPLOAD_MAX_FILES_PER_EXECUTION,
     EVIDENCE_URL_TTL: data.EVIDENCE_URL_TTL,
+    RATE_LIMIT_STORAGE_DRIVER: data.RATE_LIMIT_STORAGE_DRIVER,
   };
 }
 
@@ -176,6 +189,9 @@ export function readEnvironment(
     PASSWORD_RESET_DELIVERY_MODE: configService.getOrThrow<
       'local' | 'disabled'
     >('PASSWORD_RESET_DELIVERY_MODE'),
+    EVIDENCE_STORAGE_DRIVER: configService.getOrThrow<'local'>(
+      'EVIDENCE_STORAGE_DRIVER',
+    ),
     EVIDENCE_STORAGE_ROOT: configService.getOrThrow<string>(
       'EVIDENCE_STORAGE_ROOT',
     ),
@@ -189,6 +205,9 @@ export function readEnvironment(
       'UPLOAD_MAX_FILES_PER_EXECUTION',
     ),
     EVIDENCE_URL_TTL: configService.getOrThrow<number>('EVIDENCE_URL_TTL'),
+    RATE_LIMIT_STORAGE_DRIVER: configService.getOrThrow<'memory'>(
+      'RATE_LIMIT_STORAGE_DRIVER',
+    ),
   };
 }
 

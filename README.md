@@ -706,9 +706,10 @@ armazenado no limitador somente como digest. Essa estratégia atende ao processo
 local de instância única; uma implantação com múltiplas réplicas precisará de um
 storage compartilhado para manter o limite global.
 
-Como os tokens são cookies, todos os `POST` de autenticação exigem `Origin`
-presente na allowlist, além de CORS com credenciais e `SameSite=Strict`. Clientes
-não-browser devem enviar explicitamente uma origem permitida.
+Como os tokens são cookies, toda mutação autenticada por cookie exige `Origin`
+presente na allowlist, além de CORS com credenciais e `SameSite=Strict`. Os
+endpoints públicos de autenticação mantêm a mesma exigência explícita. Clientes
+não-browser autenticados por cookie devem enviar uma origem permitida.
 
 A recuperação cria tokens opacos de 32 bytes por CSPRNG e persiste somente o
 SHA-256. Uma nova solicitação invalida tokens anteriores do mesmo usuário. A
@@ -1397,6 +1398,8 @@ AVAILABLE
 - Não confiar no nome original do arquivo.
 - Sanitizar nomes utilizados em download.
 - Validar MIME type informado e, quando possível, conteúdo real.
+- A implementação local exige extensão coerente e valida a assinatura básica de
+  JPEG, PNG e WebP antes de persistir o upload.
 - Limitar tamanho e quantidade por ordem.
 - URL de upload e download com expiração curta.
 - Não tornar bucket ou objetos públicos.
@@ -1853,6 +1856,12 @@ Nunca enviar senha, token, cookie, documento completo, evidência ou payload sen
 - Separar ambientes de desenvolvimento, teste e produção.
 
 Provedor específico deve ser documentado somente após escolha real.
+
+O bootstrap falha fechado com `NODE_ENV=production` enquanto os únicos adapters
+disponíveis forem `EVIDENCE_STORAGE_DRIVER=local` e
+`RATE_LIMIT_STORAGE_DRIVER=memory`. Um deploy real precisa fornecer object
+storage privado e rate limiter compartilhado; não existe fallback silencioso
+para filesystem efêmero ou limite por processo.
 
 ## Ordem recomendada de implementação
 

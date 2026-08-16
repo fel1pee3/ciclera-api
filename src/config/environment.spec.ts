@@ -31,6 +31,8 @@ describe('validateEnvironment', () => {
     expect(environment.REFRESH_TOKEN_TTL).toBe(2_592_000);
     expect(environment.PASSWORD_RESET_TOKEN_TTL).toBe(1_800);
     expect(environment.PASSWORD_RESET_DELIVERY_MODE).toBe('local');
+    expect(environment.EVIDENCE_STORAGE_DRIVER).toBe('local');
+    expect(environment.RATE_LIMIT_STORAGE_DRIVER).toBe('memory');
   });
 
   it('prevents bootstrap when required configuration is missing', () => {
@@ -57,6 +59,16 @@ describe('validateEnvironment', () => {
         PASSWORD_RESET_DELIVERY_MODE: 'local',
       }),
     ).toThrow(/PASSWORD_RESET_DELIVERY_MODE/);
+  });
+
+  it('fails closed when production-only storage and rate limiting are absent', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        NODE_ENV: 'production',
+        PASSWORD_RESET_DELIVERY_MODE: 'disabled',
+      }),
+    ).toThrow(/EVIDENCE_STORAGE_DRIVER.*RATE_LIMIT_STORAGE_DRIVER/);
   });
 
   it('does not include an invalid secret value in the failure message', () => {

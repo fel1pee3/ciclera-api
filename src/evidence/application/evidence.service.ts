@@ -15,6 +15,10 @@ import {
   EvidenceTokenInvalidError,
   EvidenceTypeInvalidError,
 } from '../domain/evidence.errors';
+import {
+  hasValidEvidenceFileName,
+  hasValidEvidenceSignature,
+} from '../domain/evidence-file';
 import { EvidenceTokenService } from '../infrastructure/evidence-token.service';
 import {
   EVIDENCE_REPOSITORY,
@@ -61,6 +65,7 @@ export class EvidenceService {
     const contentType = input.contentType.toLowerCase();
     if (
       !this.allowedTypes.includes(contentType) ||
+      !hasValidEvidenceFileName(input.fileName, contentType) ||
       input.sizeBytes < 1 ||
       input.sizeBytes > this.maxSize
     ) {
@@ -105,6 +110,7 @@ export class EvidenceService {
     if (
       !this.tokens.verify(token, 'upload', record.id, record.objectKey) ||
       record.contentType !== contentType.toLowerCase() ||
+      !hasValidEvidenceSignature(content, record.contentType) ||
       Number(record.sizeBytes) !== content.byteLength ||
       content.byteLength > this.maxSize
     ) {
