@@ -57,6 +57,16 @@ export class PrismaEvidenceRepository implements EvidenceRepository {
     });
   }
 
+  findForManager(input: Parameters<EvidenceRepository['findForManager']>[0]) {
+    return this.prisma.evidence.findFirst({
+      where: {
+        id: input.evidenceId,
+        organizationId: input.organizationId,
+        ...(input.statuses ? { status: { in: input.statuses } } : {}),
+      },
+    });
+  }
+
   confirm(input: Parameters<EvidenceRepository['confirm']>[0]) {
     return this.prisma.$transaction(async (transaction) => {
       const execution = await editableExecution(transaction, input);

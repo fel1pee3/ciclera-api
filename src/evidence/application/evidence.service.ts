@@ -162,6 +162,30 @@ export class EvidenceService {
     return { record, content: await this.storage.readObject(record.objectKey) };
   }
 
+  async readUrlForManager(
+    principal: AuthenticatedPrincipal,
+    evidenceId: string,
+  ) {
+    const record = await this.managerAuthorized(principal, evidenceId);
+    const capability = this.tokens.issue('read', record.id, record.objectKey);
+    return {
+      url: `reviews/evidence/${record.id}/content?token=${encodeURIComponent(capability.token)}`,
+      expiresAt: capability.expiresAt,
+    };
+  }
+
+  async readForManager(
+    principal: AuthenticatedPrincipal,
+    evidenceId: string,
+    token: string,
+  ) {
+    const record = await this.managerAuthorized(principal, evidenceId);
+    if (!this.tokens.verify(token, 'read', record.id, record.objectKey)) {
+      throw new EvidenceTokenInvalidError();
+    }
+    return { record, content: await this.storage.readObject(record.objectKey) };
+  }
+
   async remove(
     principal: AuthenticatedPrincipal,
     requestId: string,
@@ -193,6 +217,19 @@ export class EvidenceService {
       technicianId: principal.userId,
       evidenceId,
       statuses,
+    });
+    if (!record) throw new EvidenceNotFoundError();
+    return record;
+  }
+
+  private async managerAuthorized(
+    principal: AuthenticatedPrincipal,
+    evidenceId: string,
+  ) {
+    const record = await this.evidence.findForManager({
+      organizationId: principal.organizationId,
+      evidenceId,
+      statuses: ['AVAILABLE'],
     });
     if (!record) throw new EvidenceNotFoundError();
     return record;

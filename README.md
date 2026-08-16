@@ -1202,22 +1202,20 @@ sempre produz `DRAFT`; o `PATCH` exige `version`, não aceita `status` e altera
 somente campos do rascunho. O cancelamento exige motivo e usa a ação semântica da
 state machine. Valores monetários entram e saem como strings decimais de centavos,
 e o detalhe retorna o histórico real em ordem cronológica. Busca, filtros,
-paginação e ordenações pertencem a uma allowlist. Rotas de agendamento,
-atribuição e execução listadas adiante permanecem planejadas para checkpoints
-posteriores e ainda não estão expostas.
+paginação e ordenações pertencem a uma allowlist.
 
 ### Execução
 
 ```text
 GET   /api/v1/field/work-orders
 GET   /api/v1/field/work-orders/:workOrderId
-POST  /api/v1/work-orders/:workOrderId/start
-PATCH /api/v1/work-orders/:workOrderId/execution
+POST  /api/v1/field/work-orders/:workOrderId/start
+PATCH /api/v1/field/work-orders/:workOrderId/execution
 POST  /api/v1/field/work-orders/:workOrderId/execution/additional-items
 PATCH /api/v1/field/work-orders/:workOrderId/execution/additional-items/:itemId
 DELETE /api/v1/field/work-orders/:workOrderId/execution/additional-items/:itemId
 POST  /api/v1/work-orders/:workOrderId/resume-correction
-POST  /api/v1/work-orders/:workOrderId/submit-for-review
+POST  /api/v1/field/work-orders/:workOrderId/submit-for-review
 ```
 
 ### Evidências
@@ -1229,6 +1227,8 @@ POST   /api/v1/field/work-orders/:workOrderId/execution/evidence/:evidenceId/con
 GET    /api/v1/field/evidence/:evidenceId/read-url
 GET    /api/v1/field/evidence/:evidenceId/content?token=...
 DELETE /api/v1/field/work-orders/:workOrderId/execution/evidence/:evidenceId
+GET    /api/v1/reviews/evidence/:evidenceId/read-url
+GET    /api/v1/reviews/evidence/:evidenceId/content?token=...
 ```
 
 Exclusão só é permitida enquanto a execução puder ser editada e pelo ator autorizado. Depois da submissão, seguir regra de correção e preservar auditoria.

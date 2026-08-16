@@ -6,13 +6,14 @@ import { EvidenceService } from './application/evidence.service';
 import { EVIDENCE_REPOSITORY } from './application/ports/evidence.repository';
 import { EVIDENCE_STORAGE } from './application/ports/evidence-storage.port';
 import { EvidenceController } from './http/evidence.controller';
+import { ReviewEvidenceController } from './http/review-evidence.controller';
 import { EvidenceTokenService } from './infrastructure/evidence-token.service';
 import { LocalEvidenceStorage } from './infrastructure/local-evidence-storage';
 import { PrismaEvidenceRepository } from './infrastructure/prisma-evidence.repository';
 
 @Module({
   imports: [AuthModule, PrismaModule, WorkOrdersModule],
-  controllers: [EvidenceController],
+  controllers: [EvidenceController, ReviewEvidenceController],
   providers: [
     EvidenceService,
     EvidenceTokenService,

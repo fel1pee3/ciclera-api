@@ -45,6 +45,11 @@ export interface EvidenceRepository {
     evidenceId: string;
     statuses?: EvidenceStatus[];
   }): Promise<EvidenceRecord | null>;
+  findForManager(input: {
+    organizationId: string;
+    evidenceId: string;
+    statuses?: EvidenceStatus[];
+  }): Promise<EvidenceRecord | null>;
   confirm(input: {
     organizationId: string;
     technicianId: string;

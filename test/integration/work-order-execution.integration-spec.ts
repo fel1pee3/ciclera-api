@@ -6,6 +6,9 @@ import type { AuthenticatedPrincipal } from '../../src/auth/domain/authenticated
 import { PrismaService } from '../../src/infrastructure/database/prisma/prisma.service';
 import { TechnicianWorkOrdersService } from '../../src/work-orders/application/technician-work-orders.service';
 import { WorkOrdersService } from '../../src/work-orders/application/work-orders.service';
+import { ReviewsService } from '../../src/reviews/application/reviews.service';
+import { EvidenceService } from '../../src/evidence/application/evidence.service';
+import { EvidenceNotFoundError } from '../../src/evidence/domain/evidence.errors';
 import {
   WorkOrderExecutionAlreadyStartedError,
   WorkOrderNotFoundError,
@@ -21,6 +24,8 @@ describe('Work order execution draft', () => {
   let managerService: WorkOrdersService;
   let fieldService: TechnicianWorkOrdersService;
   let checklistService: ChecklistTemplatesService;
+  let reviewsService: ReviewsService;
+  let evidenceService: EvidenceService;
   let organizationId: string;
   let owner: AuthenticatedPrincipal;
   let technician: AuthenticatedPrincipal;
@@ -35,6 +40,8 @@ describe('Work order execution draft', () => {
     managerService = moduleRef.get(WorkOrdersService);
     fieldService = moduleRef.get(TechnicianWorkOrdersService);
     checklistService = moduleRef.get(ChecklistTemplatesService);
+    reviewsService = moduleRef.get(ReviewsService);
+    evidenceService = moduleRef.get(EvidenceService);
     await assertTestDatabase(prisma);
     const suffix = `${Date.now()}-${process.pid}`;
     const organization = await prisma.organization.create({
@@ -390,6 +397,53 @@ describe('Work order execution draft', () => {
         },
       }),
     ).resolves.toBe(1);
+
+    const queue = await reviewsService.list(owner, {
+      page: 1,
+      pageSize: 20,
+      orderBy: 'AGING_DESC',
+    });
+    expect(queue.items.map((item) => item.id)).toContain(scheduled.id);
+    const review = await reviewsService.find(owner, scheduled.id);
+    expect(review.execution.checklist?.missingRequiredFieldIds).toEqual([]);
+    expect(review.execution.evidence.map((item) => item.kind).sort()).toEqual([
+      'PHOTO',
+      'SIGNATURE',
+    ]);
+    const photo = review.execution.evidence.find(
+      (item) => item.kind === 'PHOTO',
+    );
+    if (!photo) throw new Error('Expected photo evidence.');
+    const readUrl = await evidenceService.readUrlForManager(owner, photo.id);
+    expect(readUrl.url).toContain(`reviews/evidence/${photo.id}/content`);
+
+    const foreignOrganization = await prisma.organization.create({
+      data: { name: `Foreign review ${randomUUID()}` },
+    });
+    const foreignUser = await createUser(
+      prisma,
+      foreignOrganization.id,
+      `foreign-review-${randomUUID()}`,
+      'OWNER',
+    );
+    const foreignPrincipal = principal(
+      foreignUser.id,
+      foreignOrganization.id,
+      'OWNER',
+    );
+    try {
+      await expect(
+        reviewsService.find(foreignPrincipal, scheduled.id),
+      ).rejects.toBeInstanceOf(WorkOrderNotFoundError);
+      await expect(
+        evidenceService.readUrlForManager(foreignPrincipal, photo.id),
+      ).rejects.toBeInstanceOf(EvidenceNotFoundError);
+    } finally {
+      await prisma.user.delete({ where: { id: foreignUser.id } });
+      await prisma.organization.delete({
+        where: { id: foreignOrganization.id },
+      });
+    }
     await expect(
       fieldService.updateExecution(
         technician,

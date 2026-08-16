@@ -14,6 +14,7 @@ import { PrismaModule } from './infrastructure/database/prisma/prisma.module';
 import { StructuredLoggerService } from './observability/structured-logger.service';
 import { UsersModule } from './users/users.module';
 import { WorkOrdersModule } from './work-orders/work-orders.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { WorkOrdersModule } from './work-orders/work-orders.module';
     EquipmentModule,
     WorkOrdersModule,
     EvidenceModule,
+    ReviewsModule,
     HealthModule,
   ],
   providers: [StructuredLoggerService],
