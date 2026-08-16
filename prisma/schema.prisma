@@ -260,6 +260,7 @@ model WorkOrder {
   actualEndAt           DateTime?                @map("actual_end_at") @db.Timestamptz(6)
   expectedAmountInCents BigInt?                  @map("expected_amount_in_cents")
   finalAmountInCents    BigInt?                  @map("final_amount_in_cents")
+  financialSnapshot     Json?                    @map("financial_snapshot")
   version               Int                      @default(1)
   createdByUserId       String                   @map("created_by_user_id") @db.Uuid
   createdBy             User                     @relation("WorkOrderCreator", fields: [organizationId, createdByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)

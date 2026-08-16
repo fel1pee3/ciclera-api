@@ -1,7 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AuthenticatedPrincipal } from '../../auth/domain/authenticated-principal';
-import { WorkOrderNotFoundError } from '../../work-orders/domain/work-order.errors';
 import {
+  WorkOrderExecutionIncompleteError,
+  WorkOrderManagementForbiddenError,
+  WorkOrderNotFoundError,
   WorkOrderStatusLockedError,
   WorkOrderVersionConflictError,
 } from '../../work-orders/domain/work-order.errors';
@@ -18,6 +20,12 @@ export class ReviewsService {
     @Inject(REVIEW_REPOSITORY) private readonly reviews: ReviewRepository,
   ) {}
 
+  private requireManager(principal: AuthenticatedPrincipal) {
+    if (principal.role === 'TECHNICIAN') {
+      throw new WorkOrderManagementForbiddenError();
+    }
+  }
+
   list(
     principal: AuthenticatedPrincipal,
     query: {
@@ -26,6 +34,7 @@ export class ReviewsService {
       orderBy: 'AGING_DESC' | 'EXPECTED_AMOUNT_DESC';
     },
   ) {
+    this.requireManager(principal);
     return this.reviews.list({
       ...query,
       organizationId: principal.organizationId,
@@ -33,6 +42,7 @@ export class ReviewsService {
   }
 
   async find(principal: AuthenticatedPrincipal, workOrderId: string) {
+    this.requireManager(principal);
     const result = await this.reviews.find(
       principal.organizationId,
       workOrderId,
@@ -47,6 +57,7 @@ export class ReviewsService {
     workOrderId: string,
     input: { version: number; reason: ReviewReason; description: string },
   ) {
+    this.requireManager(principal);
     const result = await this.reviews.requestCorrection({
       organizationId: principal.organizationId,
       actorUserId: principal.userId,
@@ -63,5 +74,35 @@ export class ReviewsService {
       throw new WorkOrderVersionConflictError();
     }
     return { status: 'PENDING_CORRECTION' as const };
+  }
+
+  async approve(
+    principal: AuthenticatedPrincipal,
+    requestId: string,
+    workOrderId: string,
+    version: number,
+  ) {
+    this.requireManager(principal);
+    const result = await this.reviews.approve({
+      organizationId: principal.organizationId,
+      actorUserId: principal.userId,
+      requestId,
+      workOrderId,
+      expectedVersion: version,
+    });
+    if (result.status === 'NOT_FOUND') throw new WorkOrderNotFoundError();
+    if (result.status === 'STATUS_LOCKED') {
+      throw new WorkOrderStatusLockedError();
+    }
+    if (result.status === 'VERSION_CONFLICT') {
+      throw new WorkOrderVersionConflictError();
+    }
+    if (result.status === 'INCOMPLETE') {
+      throw new WorkOrderExecutionIncompleteError(result.issues);
+    }
+    return {
+      status: 'READY_TO_BILL' as const,
+      finalAmountInCents: result.finalAmountInCents,
+    };
   }
 }

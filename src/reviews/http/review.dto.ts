@@ -60,3 +60,10 @@ export class RequestCorrectionDto {
   @MaxLength(2000)
   description!: string;
 }
+
+export class ApproveReviewDto {
+  @ApiProperty({ minimum: 1 })
+  @IsInt()
+  @Min(1)
+  version!: number;
+}

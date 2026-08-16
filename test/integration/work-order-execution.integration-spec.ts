@@ -15,6 +15,7 @@ import {
   WorkOrderVersionConflictError,
   ChecklistResponseInvalidError,
   WorkOrderExecutionIncompleteError,
+  WorkOrderManagementForbiddenError,
   WorkOrderStatusLockedError,
 } from '../../src/work-orders/domain/work-order.errors';
 
@@ -374,6 +375,24 @@ describe('Work order execution draft', () => {
         },
       ],
     });
+    await prisma.workOrder.update({
+      where: { id: scheduled.id },
+      data: { expectedAmountInCents: 10_000n },
+    });
+    await prisma.additionalItem.create({
+      data: {
+        organizationId,
+        workOrderId: scheduled.id,
+        executionId,
+        createdByUserId: technician.userId,
+        updatedByUserId: technician.userId,
+        type: 'SERVICE',
+        description: 'Ajuste adicional aprovado',
+        quantityInThousand: 1_000n,
+        unitAmountInCents: 2_500n,
+        totalAmountInCents: 2_500n,
+      },
+    });
 
     const submitted = await fieldService.submitForReview(
       technician,
@@ -532,6 +551,65 @@ describe('Work order execution draft', () => {
     ).resolves.toBe(2);
     const rereview = await reviewsService.find(owner, scheduled.id);
     expect(rereview.reviews).toHaveLength(1);
+
+    await expect(
+      reviewsService.approve(
+        technician,
+        'technician-approval',
+        scheduled.id,
+        resubmitted.version,
+      ),
+    ).rejects.toBeInstanceOf(WorkOrderManagementForbiddenError);
+    const approvals = await Promise.allSettled([
+      reviewsService.approve(
+        owner,
+        'approval-one',
+        scheduled.id,
+        resubmitted.version,
+      ),
+      reviewsService.approve(
+        owner,
+        'approval-two',
+        scheduled.id,
+        resubmitted.version,
+      ),
+    ]);
+    expect(
+      approvals.filter((item) => item.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(approvals.filter((item) => item.status === 'rejected')).toHaveLength(
+      1,
+    );
+    const approved = await prisma.workOrder.findUniqueOrThrow({
+      where: { id: scheduled.id },
+    });
+    expect(approved).toMatchObject({
+      status: 'READY_TO_BILL',
+      finalAmountInCents: 12_500n,
+    });
+    expect(approved.financialSnapshot).toMatchObject({
+      expectedAmountInCents: '10000',
+      additionalTotalInCents: '2500',
+      finalAmountInCents: '12500',
+    });
+    await expect(
+      prisma.review.count({
+        where: {
+          organizationId,
+          workOrderId: scheduled.id,
+          decision: 'APPROVED',
+        },
+      }),
+    ).resolves.toBe(1);
+    await expect(
+      prisma.workOrderStatusHistory.count({
+        where: {
+          organizationId,
+          workOrderId: scheduled.id,
+          newStatus: 'READY_TO_BILL',
+        },
+      }),
+    ).resolves.toBe(1);
   });
 
   async function createScheduled(label: string) {

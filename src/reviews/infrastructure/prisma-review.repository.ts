@@ -6,6 +6,7 @@ import {
   type ChecklistSnapshot,
 } from '../../checklists/domain/checklist';
 import { PrismaService } from '../../infrastructure/database/prisma/prisma.service';
+import { executionCompletionIssues } from '../../work-orders/domain/execution-completion';
 import type { ReviewRepository } from '../application/ports/review.repository';
 
 const queueSelect = {
@@ -242,6 +243,136 @@ export class PrismaReviewRepository implements ReviewRepository {
         },
       });
       return { status: 'SUCCESS' } as const;
+    });
+  }
+
+  approve(input: Parameters<ReviewRepository['approve']>[0]) {
+    return this.prisma.$transaction(async (transaction) => {
+      const current = await transaction.workOrder.findUnique({
+        where: {
+          organizationId_id: {
+            organizationId: input.organizationId,
+            id: input.workOrderId,
+          },
+        },
+        select: {
+          status: true,
+          version: true,
+          expectedAmountInCents: true,
+          finalAmountInCents: true,
+          execution: {
+            select: {
+              checklistSnapshot: true,
+              checklistResponses: {
+                select: { fieldId: true, value: true },
+              },
+              evidence: {
+                where: { status: 'AVAILABLE' },
+                select: { kind: true },
+              },
+              additionalItems: {
+                select: {
+                  id: true,
+                  type: true,
+                  description: true,
+                  quantityInThousand: true,
+                  unitAmountInCents: true,
+                  totalAmountInCents: true,
+                },
+                orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              },
+            },
+          },
+        },
+      });
+      if (!current) return { status: 'NOT_FOUND' } as const;
+      if (current.status === 'READY_TO_BILL' && current.finalAmountInCents) {
+        return {
+          status: 'ALREADY_APPROVED',
+          finalAmountInCents: current.finalAmountInCents,
+        } as const;
+      }
+      if (current.status !== 'AWAITING_REVIEW' || !current.execution) {
+        return { status: 'STATUS_LOCKED' } as const;
+      }
+      if (current.version !== input.expectedVersion) {
+        return { status: 'VERSION_CONFLICT' } as const;
+      }
+      const issues = executionCompletionIssues({
+        checklistSnapshot: current.execution.checklistSnapshot,
+        checklistResponses: current.execution.checklistResponses,
+        evidence: current.execution.evidence,
+      });
+      if (issues.length) return { status: 'INCOMPLETE', issues } as const;
+
+      const additionalTotalInCents = current.execution.additionalItems.reduce(
+        (total, item) => total + item.totalAmountInCents,
+        0n,
+      );
+      const expectedAmountInCents = current.expectedAmountInCents ?? 0n;
+      const finalAmountInCents = expectedAmountInCents + additionalTotalInCents;
+      const approvedAt = new Date();
+      const financialSnapshot = {
+        expectedAmountInCents: expectedAmountInCents.toString(),
+        additionalTotalInCents: additionalTotalInCents.toString(),
+        finalAmountInCents: finalAmountInCents.toString(),
+        approvedAt: approvedAt.toISOString(),
+        additionalItems: current.execution.additionalItems.map((item) => ({
+          id: item.id,
+          type: item.type,
+          description: item.description,
+          quantityInThousand: item.quantityInThousand.toString(),
+          unitAmountInCents: item.unitAmountInCents.toString(),
+          totalAmountInCents: item.totalAmountInCents.toString(),
+        })),
+      };
+      const updated = await transaction.workOrder.updateMany({
+        where: {
+          id: input.workOrderId,
+          organizationId: input.organizationId,
+          status: 'AWAITING_REVIEW',
+          version: input.expectedVersion,
+        },
+        data: {
+          status: 'READY_TO_BILL',
+          finalAmountInCents,
+          financialSnapshot,
+          version: { increment: 1 },
+        },
+      });
+      if (updated.count !== 1) {
+        return { status: 'VERSION_CONFLICT' } as const;
+      }
+      await transaction.review.create({
+        data: {
+          organizationId: input.organizationId,
+          workOrderId: input.workOrderId,
+          actorUserId: input.actorUserId,
+          decision: 'APPROVED',
+        },
+      });
+      await transaction.workOrderStatusHistory.create({
+        data: {
+          organizationId: input.organizationId,
+          workOrderId: input.workOrderId,
+          previousStatus: 'AWAITING_REVIEW',
+          newStatus: 'READY_TO_BILL',
+          actorUserId: input.actorUserId,
+          reason: 'REVIEW_APPROVED',
+        },
+      });
+      await transaction.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          requestId: input.requestId,
+          action: 'WORK_ORDER_REVIEW_APPROVED',
+          resourceType: 'WORK_ORDER',
+          resourceId: input.workOrderId,
+          metadata: { finalAmountInCents: finalAmountInCents.toString() },
+        },
+      });
+      return { status: 'SUCCESS', finalAmountInCents } as const;
     });
   }
 }

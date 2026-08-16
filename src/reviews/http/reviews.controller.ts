@@ -22,6 +22,7 @@ import { formatWorkOrderNumber } from '../../work-orders/domain/work-order';
 import { ReviewsService } from '../application/reviews.service';
 import type { ReviewQueueItem } from '../application/ports/review.repository';
 import {
+  ApproveReviewDto,
   ReviewDetailsResponseDto,
   ReviewQueueQueryDto,
   ReviewQueueResponseDto,
@@ -93,6 +94,35 @@ export class ReviewsController {
       workOrderId,
       input,
     );
+  }
+}
+
+@ApiTags('reviews')
+@ApiCookieAuth(accessCookieName)
+@Roles('OWNER', 'ADMIN')
+@Controller('work-orders')
+export class ReviewApprovalController {
+  constructor(private readonly reviews: ReviewsService) {}
+
+  @Post(':workOrderId/approve')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  async approve(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Req() request: RequestWithId,
+    @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
+    @Body() input: ApproveReviewDto,
+  ) {
+    const result = await this.reviews.approve(
+      principal,
+      getRequestId(request),
+      workOrderId,
+      input.version,
+    );
+    return {
+      ...result,
+      finalAmountInCents: result.finalAmountInCents.toString(),
+    };
   }
 }
 

@@ -3,6 +3,7 @@ import type {
   ChecklistSnapshot,
 } from '../../../checklists/domain/checklist';
 import type { WorkOrderPriority } from '../../../work-orders/domain/work-order';
+import type { ExecutionCompletionIssue } from '../../../work-orders/application/ports/technician-work-order.repository';
 import type { ReviewReason, ReviewRecord } from '../../domain/review';
 
 export const REVIEW_REPOSITORY = Symbol('REVIEW_REPOSITORY');
@@ -61,6 +62,13 @@ export type ReviewMutationResult =
   | { status: 'STATUS_LOCKED' }
   | { status: 'VERSION_CONFLICT' };
 
+export type ReviewApprovalResult =
+  | { status: 'SUCCESS' | 'ALREADY_APPROVED'; finalAmountInCents: bigint }
+  | { status: 'INCOMPLETE'; issues: ExecutionCompletionIssue[] }
+  | { status: 'NOT_FOUND' }
+  | { status: 'STATUS_LOCKED' }
+  | { status: 'VERSION_CONFLICT' };
+
 export interface ReviewRepository {
   list(input: {
     organizationId: string;
@@ -86,4 +94,11 @@ export interface ReviewRepository {
     reason: ReviewReason;
     description: string;
   }): Promise<ReviewMutationResult>;
+  approve(input: {
+    organizationId: string;
+    actorUserId: string;
+    requestId: string;
+    workOrderId: string;
+    expectedVersion: number;
+  }): Promise<ReviewApprovalResult>;
 }

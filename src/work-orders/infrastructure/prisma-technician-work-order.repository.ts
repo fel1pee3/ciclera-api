@@ -13,6 +13,7 @@ import {
   type ChecklistAnswer,
   type ChecklistSnapshot,
 } from '../../checklists/domain/checklist';
+import { executionCompletionIssues } from '../domain/execution-completion';
 
 const technicianWorkOrderSelect = {
   id: true,
@@ -420,7 +421,7 @@ export class PrismaTechnicianWorkOrderRepository implements TechnicianWorkOrderR
       if (current.execution.version !== input.expectedVersion) {
         return { status: 'VERSION_CONFLICT' } as const;
       }
-      const issues = completionIssues(current.execution);
+      const issues = executionCompletionIssues(current.execution);
       if (issues.length) return { status: 'INCOMPLETE', issues } as const;
 
       const lockedExecution = await transaction.workOrderExecution.updateMany({
@@ -530,38 +531,6 @@ export class PrismaTechnicianWorkOrderRepository implements TechnicianWorkOrderR
       return { status: 'SUCCESS' } as const;
     }, executionTransactionOptions);
   }
-}
-
-function completionIssues(execution: {
-  checklistSnapshot: Prisma.JsonValue | null;
-  checklistResponses: Array<{ fieldId: string; value: Prisma.JsonValue }>;
-  evidence: Array<{ kind: 'PHOTO' | 'SIGNATURE' }>;
-}) {
-  const snapshot =
-    execution.checklistSnapshot as unknown as ChecklistSnapshot | null;
-  const responses = execution.checklistResponses.map((response) => ({
-    fieldId: response.fieldId,
-    value: response.value as ChecklistAnswer['value'],
-  }));
-  const issues: Array<
-    'CHECKLIST_INCOMPLETE' | 'PHOTO_REQUIRED' | 'SIGNATURE_REQUIRED'
-  > = [];
-  if (snapshot && missingRequiredFieldIds(snapshot, responses).length) {
-    issues.push('CHECKLIST_INCOMPLETE');
-  }
-  if (
-    snapshot?.requirePhoto &&
-    !execution.evidence.some((item) => item.kind === 'PHOTO')
-  ) {
-    issues.push('PHOTO_REQUIRED');
-  }
-  if (
-    snapshot?.requireSignature &&
-    !execution.evidence.some((item) => item.kind === 'SIGNATURE')
-  ) {
-    issues.push('SIGNATURE_REQUIRED');
-  }
-  return issues;
 }
 
 const executionTransactionOptions = {
