@@ -23,6 +23,11 @@ enum UserStatus {
   INACTIVE
 }
 
+enum ServiceLocationStatus {
+  ACTIVE
+  INACTIVE
+}
+
 model Organization {
   id        String             @id @default(uuid()) @db.Uuid
   name      String             @db.VarChar(160)
@@ -30,11 +35,64 @@ model Organization {
   status    OrganizationStatus @default(ACTIVE)
   users     User[]
   auditLogs AuditLog[]
+  customers Customer[]
+  locations ServiceLocation[]
   createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([status])
   @@map("organizations")
+}
+
+model Customer {
+  id                 String            @id @default(uuid()) @db.Uuid
+  organizationId     String            @map("organization_id") @db.Uuid
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  name               String            @db.VarChar(160)
+  normalizedName     String            @map("normalized_name") @db.VarChar(160)
+  document           String?           @db.VarChar(32)
+  normalizedDocument String?           @map("normalized_document") @db.VarChar(32)
+  email              String?           @db.VarChar(320)
+  phone              String?           @db.VarChar(32)
+  notes              String?           @db.VarChar(2000)
+  archivedAt         DateTime?         @map("archived_at") @db.Timestamptz(6)
+  locations          ServiceLocation[]
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, normalizedDocument])
+  @@index([organizationId, normalizedName, id])
+  @@index([organizationId, archivedAt, id])
+  @@map("customers")
+}
+
+model ServiceLocation {
+  id                 String                @id @default(uuid()) @db.Uuid
+  organizationId     String                @map("organization_id") @db.Uuid
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  customerId         String                @map("customer_id") @db.Uuid
+  customer           Customer              @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  name               String                @db.VarChar(160)
+  normalizedName     String                @map("normalized_name") @db.VarChar(160)
+  postalCode         String                @map("postal_code") @db.VarChar(16)
+  street             String                @db.VarChar(160)
+  number             String                @db.VarChar(32)
+  complement         String?               @db.VarChar(120)
+  neighborhood       String                @db.VarChar(120)
+  city               String                @db.VarChar(120)
+  state              String                @db.Char(2)
+  country            String                @default("BR") @db.Char(2)
+  contactName        String?               @map("contact_name") @db.VarChar(160)
+  contactPhone       String?               @map("contact_phone") @db.VarChar(32)
+  accessInstructions String?               @map("access_instructions") @db.VarChar(1000)
+  status             ServiceLocationStatus @default(ACTIVE)
+  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, customerId, status, normalizedName, id])
+  @@map("service_locations")
 }
 
 model User {

@@ -1141,6 +1141,19 @@ PATCH /api/v1/equipment/:equipmentId
 POST  /api/v1/equipment/:equipmentId/archive
 ```
 
+Clientes e locais usam paginação no PostgreSQL e escopo explícito da organização
+autenticada. A busca inicial é por prefixo normalizado (`normalizedName`) e, para
+clientes, também por prefixo de documento normalizado; os índices começam por
+`organizationId` e pelos campos usados na consulta, sem carregar toda a tabela em
+memória. `archive=ACTIVE|ARCHIVED|ALL` controla a listagem de clientes.
+
+`Customer` preserva nome, documento opcional, contatos, observações e
+`archivedAt`. O endpoint de arquivamento é idempotente e não exclui o cliente ou
+seus locais. `ServiceLocation` mantém endereço estruturado, contato e instruções
+de acesso, com status `ACTIVE|INACTIVE`. A foreign key composta
+`(organization_id, customer_id)` impede relações cruzadas entre tenants e todas
+as foreign keys usam `ON DELETE RESTRICT`. Não existe endpoint `DELETE` comum.
+
 ### Ordens e agenda
 
 ```text

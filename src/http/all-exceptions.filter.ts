@@ -20,6 +20,13 @@ import {
   UserEmailAlreadyInUseError,
   UserManagementForbiddenError,
 } from '../users/domain/user-management.errors';
+import {
+  ArchivedCustomerError,
+  CustomerDocumentConflictError,
+  CustomerManagementForbiddenError,
+  CustomerNotFoundError,
+  ServiceLocationNotFoundError,
+} from '../customers/domain/customer.errors';
 
 export interface ProblemDetails {
   type: string;
@@ -153,6 +160,51 @@ function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
       title: 'Dados inválidos',
       detail: 'Informe ao menos um campo para alteração.',
       code: 'EMPTY_USER_UPDATE',
+    };
+  }
+
+  if (exception instanceof CustomerNotFoundError) {
+    return {
+      type: 'https://ciclera.com.br/problems/customer-not-found',
+      title: 'Cliente não encontrado',
+      detail: 'O cliente solicitado não foi encontrado.',
+      code: 'CUSTOMER_NOT_FOUND',
+    };
+  }
+
+  if (exception instanceof ServiceLocationNotFoundError) {
+    return {
+      type: 'https://ciclera.com.br/problems/location-not-found',
+      title: 'Local não encontrado',
+      detail: 'O local solicitado não foi encontrado.',
+      code: 'LOCATION_NOT_FOUND',
+    };
+  }
+
+  if (exception instanceof CustomerDocumentConflictError) {
+    return {
+      type: 'https://ciclera.com.br/problems/customer-document-conflict',
+      title: 'Documento já cadastrado',
+      detail: 'Já existe um cliente com este documento na organização.',
+      code: 'CUSTOMER_DOCUMENT_CONFLICT',
+    };
+  }
+
+  if (exception instanceof ArchivedCustomerError) {
+    return {
+      type: 'https://ciclera.com.br/problems/customer-archived',
+      title: 'Cliente arquivado',
+      detail: 'Não é possível adicionar locais a um cliente arquivado.',
+      code: 'CUSTOMER_ARCHIVED',
+    };
+  }
+
+  if (exception instanceof CustomerManagementForbiddenError) {
+    return {
+      type: 'https://ciclera.com.br/problems/customer-management-forbidden',
+      title: 'Acesso negado',
+      detail: 'Seu perfil não pode gerenciar clientes ou locais.',
+      code: 'CUSTOMER_MANAGEMENT_FORBIDDEN',
     };
   }
 
@@ -292,6 +344,24 @@ function getHttpStatus(exception: unknown): number {
 
   if (exception instanceof EmptyUserUpdateError) {
     return HttpStatus.UNPROCESSABLE_ENTITY;
+  }
+
+  if (
+    exception instanceof CustomerNotFoundError ||
+    exception instanceof ServiceLocationNotFoundError
+  ) {
+    return HttpStatus.NOT_FOUND;
+  }
+
+  if (
+    exception instanceof CustomerDocumentConflictError ||
+    exception instanceof ArchivedCustomerError
+  ) {
+    return HttpStatus.CONFLICT;
+  }
+
+  if (exception instanceof CustomerManagementForbiddenError) {
+    return HttpStatus.FORBIDDEN;
   }
 
   if (exception instanceof HttpException) {
