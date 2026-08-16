@@ -95,3 +95,7 @@ entrar por ambiente seguro, sem aparecer no histórico do shell.
 - Teste ponta a ponta de upload e leitura privada.
 - Identificador do backup e resultado da restauração isolada.
 - Consulta de logs por request ID e procedimento de rollback exercitado.
+
+Após a aprovação dessas evidências, executar
+[`PILOT_UAT_RUNBOOK.md`](PILOT_UAT_RUNBOOK.md). O UAT não pode aprovar o CP-44 por
+substituição.

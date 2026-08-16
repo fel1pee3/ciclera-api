@@ -1859,6 +1859,9 @@ Provedor específico deve ser documentado somente após escolha real.
 
 O procedimento provider-neutral e os critérios de evidência para staging estão
 em [`docs/STAGING_RUNBOOK.md`](docs/STAGING_RUNBOOK.md).
+O roteiro controlado do UAT está em
+[`docs/PILOT_UAT_RUNBOOK.md`](docs/PILOT_UAT_RUNBOOK.md) e só deve ser executado
+depois da aprovação do staging.
 
 O bootstrap falha fechado com `NODE_ENV=production` enquanto os únicos adapters
 disponíveis forem `EVIDENCE_STORAGE_DRIVER=local` e
