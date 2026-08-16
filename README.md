@@ -91,6 +91,7 @@ docker compose up -d --wait postgres
 npm run db:check
 npm run db:check:test
 npm run db:migrate:dev
+npm run db:seed
 npm run test:integration
 npm run start:dev
 ```
@@ -185,6 +186,8 @@ docker compose up -d --wait postgres
 | `npm run db:check:test` | Validar a conexão Node.js com o banco de testes separado |
 | `npm run db:migrate:dev` | Criar e aplicar migrations no banco local de desenvolvimento |
 | `npm run db:migrate:deploy` | Aplicar migrations já versionadas no ambiente selecionado |
+| `npm run db:seed` | Criar ou reconciliar o seed demonstrativo no banco local de desenvolvimento |
+| `npm run db:seed:test` | Criar ou reconciliar o seed exclusivamente em `TEST_DATABASE_URL` |
 | `npm run prisma:generate` | Gerar o Prisma Client a partir do schema versionado |
 | `npm run prisma:validate` | Validar o schema Prisma sem alterar o banco |
 | `npm test` | Executar testes unitários |
@@ -1416,6 +1419,32 @@ Para mudanças incompatíveis em produção, preferir sequência expand, migrate
 ## Seed de desenvolvimento
 
 O seed deve ser determinístico, idempotente quando viável e explicitamente bloqueado em produção.
+
+O seed de identidade implementado cria duas organizações visualmente distintas e, em cada uma, um `OWNER`, um `ADMIN` e um `TECHNICIAN`. Ele aceita somente `NODE_ENV=development` ou `test`, exige URLs PostgreSQL locais e bancos de desenvolvimento e teste distintos, e nunca utiliza `DATABASE_URL` como fallback durante testes.
+
+Executar duas vezes é seguro e não duplica organizações ou usuários:
+
+```bash
+npm run db:seed
+npm run db:seed
+```
+
+Credencial pública exclusivamente demonstrativa e local:
+
+| Organização | Perfil | E-mail |
+| --- | --- | --- |
+| Organização A | `OWNER` | `owner.a@demo.ciclera.local` |
+| Organização A | `ADMIN` | `admin.a@demo.ciclera.local` |
+| Organização A | `TECHNICIAN` | `technician.a@demo.ciclera.local` |
+| Organização B | `OWNER` | `owner.b@demo.ciclera.local` |
+| Organização B | `ADMIN` | `admin.b@demo.ciclera.local` |
+| Organização B | `TECHNICIAN` | `technician.b@demo.ciclera.local` |
+
+Todos usam a senha demonstrativa `CicleraLocalOnly!2026`. Ela é pública, não é secret e nunca deve ser reutilizada fora do ambiente local. O banco persiste somente hashes Argon2id com salts independentes. O seed não cria autenticação nem endpoints; o uso dessas credenciais para login pertence ao checkpoint de autenticação.
+
+O `npm run test:integration` aplica migrations e executa o seed duas vezes somente em `TEST_DATABASE_URL`. O teste valida perfis, isolamento, unicidade, hashes e bloqueios de ambiente, e remove apenas os IDs reservados criados pelo próprio seed.
+
+O conteúdo operacional abaixo representa a evolução final esperada do seed após os respectivos models serem implementados em checkpoints posteriores; ele não faz parte do CP-06:
 
 Conteúdo mínimo:
 

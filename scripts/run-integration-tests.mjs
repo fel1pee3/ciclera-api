@@ -6,6 +6,7 @@ const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(currentDirectory, '..');
 const prismaCli = resolve(projectRoot, 'node_modules/prisma/build/index.js');
 const jestCli = resolve(projectRoot, 'node_modules/jest/bin/jest.js');
+const seedRunner = resolve(projectRoot, 'scripts/run-database-seed.mjs');
 
 const developmentUrlValue = process.env.DATABASE_URL;
 const testUrlValue = process.env.TEST_DATABASE_URL;
@@ -50,11 +51,16 @@ if (
 const testEnvironment = {
   ...process.env,
   NODE_ENV: 'test',
-  DATABASE_URL: testUrlValue,
   TEST_DATABASE_URL: testUrlValue,
 };
+const migrationEnvironment = {
+  ...testEnvironment,
+  DATABASE_URL: testUrlValue,
+};
 
-run(prismaCli, ['migrate', 'deploy'], testEnvironment);
+run(prismaCli, ['migrate', 'deploy'], migrationEnvironment);
+run(seedRunner, ['test'], testEnvironment);
+run(seedRunner, ['test'], testEnvironment);
 run(
   jestCli,
   ['--config', './test/jest-integration.json', '--runInBand'],
