@@ -19,6 +19,15 @@ const rawEnvironmentSchema = z.object({
     .regex(/^\d+(?:kb|mb)$/i, 'must use a value such as 100kb or 1mb')
     .default('100kb'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  JWT_ACCESS_SECRET: z.string().min(32).max(4_096),
+  JWT_ACCESS_ISSUER: z.string().min(3).max(200),
+  JWT_ACCESS_AUDIENCE: z.string().min(3).max(200),
+  ACCESS_TOKEN_TTL: z.coerce.number().int().min(60).max(3_600),
+  REFRESH_TOKEN_TTL: z.coerce
+    .number()
+    .int()
+    .min(3_600)
+    .max(90 * 24 * 60 * 60),
 });
 
 export type NodeEnvironment = 'development' | 'test' | 'production';
@@ -33,6 +42,11 @@ export interface EnvironmentVariables {
   CORS_ORIGINS: string[];
   HTTP_BODY_LIMIT: string;
   LOG_LEVEL: ApplicationLogLevel;
+  JWT_ACCESS_SECRET: string;
+  JWT_ACCESS_ISSUER: string;
+  JWT_ACCESS_AUDIENCE: string;
+  ACCESS_TOKEN_TTL: number;
+  REFRESH_TOKEN_TTL: number;
 }
 
 export function validateEnvironment(
@@ -79,6 +93,11 @@ export function validateEnvironment(
     CORS_ORIGINS: corsOrigins,
     HTTP_BODY_LIMIT: data.HTTP_BODY_LIMIT.toLowerCase(),
     LOG_LEVEL: data.LOG_LEVEL,
+    JWT_ACCESS_SECRET: data.JWT_ACCESS_SECRET,
+    JWT_ACCESS_ISSUER: data.JWT_ACCESS_ISSUER,
+    JWT_ACCESS_AUDIENCE: data.JWT_ACCESS_AUDIENCE,
+    ACCESS_TOKEN_TTL: data.ACCESS_TOKEN_TTL,
+    REFRESH_TOKEN_TTL: data.REFRESH_TOKEN_TTL,
   };
 }
 
@@ -94,6 +113,13 @@ export function readEnvironment(
     CORS_ORIGINS: configService.getOrThrow<string[]>('CORS_ORIGINS'),
     HTTP_BODY_LIMIT: configService.getOrThrow<string>('HTTP_BODY_LIMIT'),
     LOG_LEVEL: configService.getOrThrow<ApplicationLogLevel>('LOG_LEVEL'),
+    JWT_ACCESS_SECRET: configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
+    JWT_ACCESS_ISSUER: configService.getOrThrow<string>('JWT_ACCESS_ISSUER'),
+    JWT_ACCESS_AUDIENCE: configService.getOrThrow<string>(
+      'JWT_ACCESS_AUDIENCE',
+    ),
+    ACCESS_TOKEN_TTL: configService.getOrThrow<number>('ACCESS_TOKEN_TTL'),
+    REFRESH_TOKEN_TTL: configService.getOrThrow<number>('REFRESH_TOKEN_TTL'),
   };
 }
 

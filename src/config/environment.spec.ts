@@ -10,6 +10,11 @@ const validEnvironment = {
   TEST_DATABASE_URL: 'postgresql://user:password@localhost:55432/ciclera_test',
   WEB_URL: 'http://localhost:3000',
   CORS_ORIGINS: 'http://localhost:3000,http://127.0.0.1:3000',
+  JWT_ACCESS_SECRET: 'test-only-access-secret-with-at-least-32-characters',
+  JWT_ACCESS_ISSUER: 'ciclera-api-test',
+  JWT_ACCESS_AUDIENCE: 'ciclera-web-test',
+  ACCESS_TOKEN_TTL: '900',
+  REFRESH_TOKEN_TTL: '2592000',
 };
 
 describe('validateEnvironment', () => {
@@ -22,12 +27,24 @@ describe('validateEnvironment', () => {
       'http://localhost:3000',
       'http://127.0.0.1:3000',
     ]);
+    expect(environment.ACCESS_TOKEN_TTL).toBe(900);
+    expect(environment.REFRESH_TOKEN_TTL).toBe(2_592_000);
   });
 
   it('prevents bootstrap when required configuration is missing', () => {
     expect(() => validateEnvironment({ NODE_ENV: 'production' })).toThrow(
       /Invalid environment configuration: DATABASE_URL/,
     );
+  });
+
+  it('rejects weak access-token secrets and unsafe token lifetimes', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        JWT_ACCESS_SECRET: 'too-short',
+        ACCESS_TOKEN_TTL: '7200',
+      }),
+    ).toThrow(/JWT_ACCESS_SECRET.*ACCESS_TOKEN_TTL/);
   });
 
   it('does not include an invalid secret value in the failure message', () => {

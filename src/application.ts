@@ -9,6 +9,7 @@ import { requestIdMiddleware } from './http/request-id';
 import { createRequestLoggingMiddleware } from './http/request-logging.middleware';
 import { createValidationPipe } from './http/validation.pipe';
 import { StructuredLoggerService } from './observability/structured-logger.service';
+import { accessCookieName } from './auth/http/auth-cookies';
 
 export const apiPrefix = 'api/v1';
 
@@ -60,6 +61,11 @@ export function configureApplication(
         'Contrato HTTP dos endpoints implementados na Ciclera API',
       )
       .setVersion('1.0')
+      .addCookieAuth(accessCookieName, {
+        type: 'apiKey',
+        in: 'cookie',
+        name: accessCookieName,
+      })
       .build();
     const document = SwaggerModule.createDocument(app, swaggerConfig);
 

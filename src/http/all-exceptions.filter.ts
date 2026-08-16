@@ -8,6 +8,7 @@ import {
 import { Request, Response } from 'express';
 import { StructuredLoggerService } from '../observability/structured-logger.service';
 import { getRequestId, RequestWithId } from './request-id';
+import { AuthenticationRejectedError } from '../auth/domain/authentication-rejected.error';
 
 export interface ProblemDetails {
   type: string;
@@ -72,6 +73,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
 }
 
 function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
+  if (exception instanceof AuthenticationRejectedError) {
+    return {
+      type: 'https://ciclera.com.br/problems/invalid-credentials',
+      title: 'Falha na autenticação',
+      detail: 'E-mail, senha ou sessão inválidos.',
+      code: 'INVALID_CREDENTIALS',
+    };
+  }
+
   if (!(exception instanceof HttpException)) {
     return {};
   }
@@ -153,6 +163,12 @@ function getProblemDefaults(status: number): ProblemDefaults {
       detail: 'Revise os campos informados.',
       code: 'VALIDATION_ERROR',
     },
+    [HttpStatus.TOO_MANY_REQUESTS]: {
+      slug: 'too-many-requests',
+      title: 'Muitas tentativas',
+      detail: 'Aguarde antes de tentar novamente.',
+      code: 'RATE_LIMITED',
+    },
     [HttpStatus.SERVICE_UNAVAILABLE]: {
       slug: 'service-unavailable',
       title: 'Serviço indisponível',
@@ -172,6 +188,10 @@ function getProblemDefaults(status: number): ProblemDefaults {
 }
 
 function getHttpStatus(exception: unknown): number {
+  if (exception instanceof AuthenticationRejectedError) {
+    return HttpStatus.UNAUTHORIZED;
+  }
+
   if (exception instanceof HttpException) {
     return exception.getStatus();
   }

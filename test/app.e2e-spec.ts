@@ -216,6 +216,11 @@ describe('API foundation (e2e)', () => {
 
     expect(documentBody.paths).toHaveProperty('/health/live');
     expect(documentBody.paths).toHaveProperty('/health/ready');
+    expect(documentBody.paths).toHaveProperty('/api/v1/auth/login');
+    expect(documentBody.paths).toHaveProperty('/api/v1/auth/me');
+    expect(documentBody.paths).toHaveProperty('/api/v1/auth/refresh');
+    expect(documentBody.paths).toHaveProperty('/api/v1/auth/logout');
+    expect(documentBody.paths).toHaveProperty('/api/v1/auth/logout-all');
 
     await request(nonDevelopmentApp.getHttpServer())
       .get('/docs-json')

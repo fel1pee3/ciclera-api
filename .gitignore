@@ -15,6 +15,9 @@ coverage/
 *.log
 npm-debug.log*
 
+# Local authentication artifacts
+.ciclera-local-cookies.txt
+
 # Editors and operating systems
 .idea/
 .vscode/

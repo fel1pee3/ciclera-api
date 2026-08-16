@@ -203,7 +203,7 @@ Não documentar scripts inexistentes indefinidamente. Criá-los ou atualizar a t
 
 Manter um `.env.example` versionado e uma validação executada antes da aplicação iniciar.
 
-As variáveis da fundação HTTP, da infraestrutura PostgreSQL e do Prisma presentes em `.env.example` estão ativas. Variáveis de autenticação, storage e e-mail documentadas adiante continuam reservadas aos checkpoints correspondentes.
+As variáveis da fundação HTTP, da infraestrutura PostgreSQL, do Prisma e da autenticação presentes em `.env.example` estão ativas. Variáveis de storage, e-mail e recuperação de senha continuam reservadas aos checkpoints correspondentes.
 
 ### Aplicação e banco
 
@@ -228,12 +228,13 @@ As variáveis da fundação HTTP, da infraestrutura PostgreSQL e do Prisma prese
 
 | Variável | Obrigatória | Finalidade |
 | --- | ---: | --- |
-| `JWT_ACCESS_SECRET` | Sim | Assinatura dos access tokens |
-| `ACCESS_TOKEN_TTL` | Sim | Validade curta do access token |
-| `REFRESH_TOKEN_TTL` | Sim | Validade da sessão renovável |
-| `COOKIE_DOMAIN` | Em produção conforme domínio | Domínio permitido para cookies |
-| `COOKIE_SECURE` | Sim | Exigir HTTPS para cookies fora do ambiente local |
-| `PASSWORD_RESET_TTL` | Sim | Validade do token de redefinição |
+| `JWT_ACCESS_SECRET` | Sim | Secret com pelo menos 32 caracteres para assinar access tokens HS256 |
+| `JWT_ACCESS_ISSUER` | Sim | Emissor exato aceito no access token |
+| `JWT_ACCESS_AUDIENCE` | Sim | Audiência exata aceita no access token |
+| `ACCESS_TOKEN_TTL` | Sim | Validade do access token em segundos, entre 60 e 3600 |
+| `REFRESH_TOKEN_TTL` | Sim | Validade da sessão renovável em segundos, entre uma hora e 90 dias |
+
+Os cookies são host-only, `HttpOnly` e `SameSite=Strict`. `Secure` é derivado de `NODE_ENV=production`, sem uma variável que possa enfraquecê-lo acidentalmente. O access cookie usa `Path=/`; o refresh cookie usa `Path=/api/v1/auth`.
 
 ### Storage
 
@@ -256,7 +257,7 @@ As variáveis da fundação HTTP, da infraestrutura PostgreSQL e do Prisma prese
 | `EMAIL_FROM` | Ao habilitar e-mails | Remetente transacional |
 | `EMAIL_REPLY_TO` | Não | Endereço para respostas |
 
-Exemplo seguro implementado até o CP-03:
+Exemplo seguro implementado até o CP-08:
 
 ```env
 NODE_ENV=development
@@ -265,6 +266,12 @@ WEB_URL=http://localhost:3000
 CORS_ORIGINS=http://localhost:3000
 HTTP_BODY_LIMIT=100kb
 LOG_LEVEL=info
+
+JWT_ACCESS_SECRET=replace-with-at-least-32-characters-local-only
+JWT_ACCESS_ISSUER=ciclera-api-local
+JWT_ACCESS_AUDIENCE=ciclera-web-local
+ACCESS_TOKEN_TTL=900
+REFRESH_TOKEN_TTL=2592000
 
 POSTGRES_USER=ciclera_local
 POSTGRES_PASSWORD=replace-with-a-local-only-password
@@ -585,18 +592,18 @@ Esse contexto deve ser produzido por código confiável após validação da ses
 - Casos de uso recebem explicitamente o ator e o escopo necessários.
 - Jobs futuros devem carregar um contexto equivalente de forma verificável.
 
-### Fundação de autorização implementada
+### Autenticação e autorização implementadas
 
-O `AuthModule` disponibiliza a fundação transversal sem antecipar o login do
-CP-08:
+O `AuthModule` disponibiliza login, sessão revogável e a fundação transversal
+de autorização:
 
 - `AuthenticatedPrincipal` contém apenas `userId`, `organizationId`, `role` e
   `sessionId` obtidos de fontes confiáveis.
 - `AuthenticationGuard` depende de portas para resolver uma sessão válida e
   consultar novamente o usuário dentro da organização da sessão.
 - Os guards de autenticação e perfis são globais e fail-closed; rotas públicas
-  precisam do decorator explícito `Public`, atualmente limitado aos health
-  checks e ao código exclusivo de testes.
+  precisam do decorator explícito `Public`, limitado aos health checks, login,
+  refresh, logout idempotente e código exclusivo de testes.
 - Usuário inexistente ou inativo e organização inativa recebem o mesmo erro
   genérico `401`, sem revelar identidade, tenant ou status da conta.
 - `CurrentPrincipal` entrega o principal tipado aos controllers protegidos.
@@ -608,10 +615,27 @@ CP-08:
   autenticação é `401` e falta de permissão de perfil é `403`, todos no formato
   centralizado de erro.
 
-Até o CP-08, o adapter de sessão registrado pela aplicação recusa todas as
-requisições protegidas. Ele existe deliberadamente para que nenhuma credencial
-seja aceita antes da implementação e validação do access token e da sessão. O
-CP-07 não cria endpoints de autenticação nem altera os health checks.
+O resolver de sessão aceita somente o access cookie assinado, verifica HS256,
+emissor, audiência e expiração, e exige que a sessão persistida continue ativa.
+Depois disso, o guard consulta novamente usuário e organização pelo par
+`{ organizationId, userId }`. `Authorization`, perfil e organização enviados em
+headers livres não autenticam uma requisição.
+
+Senhas são verificadas por um port com adapter Argon2id. E-mail inexistente
+executa uma verificação Argon2 dummy e recebe a mesma resposta genérica de senha,
+usuário, organização ou sessão inválidos. Refresh tokens são opacos, gerados com
+CSPRNG e persistidos somente como SHA-256. Cada refresh revoga o registro anterior
+e cria outro na mesma família dentro de uma transação; reutilizar um token
+rotacionado revoga a família inteira.
+
+Login e refresh possuem limites em memória por IP e por identificador normalizado
+armazenado no limitador somente como digest. Essa estratégia atende ao processo
+local de instância única; uma implantação com múltiplas réplicas precisará de um
+storage compartilhado para manter o limite global.
+
+Como os tokens são cookies, todos os `POST` de autenticação exigem `Origin`
+presente na allowlist, além de CORS com credenciais e `SameSite=Strict`. Clientes
+não-browser devem enviar explicitamente uma origem permitida.
 
 ## Autorização e RBAC
 
@@ -1001,15 +1025,17 @@ Esta seção apresenta os recursos esperados, não substitui a especificação O
 
 ### Autenticação
 
-```text
-POST /api/v1/auth/login
-POST /api/v1/auth/refresh
-POST /api/v1/auth/logout
-POST /api/v1/auth/logout-all
-GET  /api/v1/auth/me
-POST /api/v1/auth/forgot-password
-POST /api/v1/auth/reset-password
-```
+| Rota | Acesso | Sucesso | Resposta |
+| --- | --- | ---: | --- |
+| `POST /api/v1/auth/login` | Público, com `Origin` permitido | `200` | Usuário e organização; grava access e refresh cookies |
+| `GET /api/v1/auth/me` | Access cookie válido | `200` | Usuário e organização atuais |
+| `POST /api/v1/auth/refresh` | Refresh cookie e `Origin` permitido | `204` | Sem body; rotaciona ambos os cookies |
+| `POST /api/v1/auth/logout` | Público e idempotente, com `Origin` permitido | `204` | Sem body; revoga a sessão reconhecida e limpa cookies |
+| `POST /api/v1/auth/logout-all` | Access cookie válido e `Origin` permitido | `204` | Sem body; revoga as sessões do usuário no tenant e limpa cookies |
+
+Tokens, hashes e status internos nunca aparecem nos bodies. Recuperação de
+senha (`forgot-password` e `reset-password`) pertence ao CP-09 e não está
+registrada nesta versão.
 
 ### Organização e usuários
 
@@ -1468,7 +1494,32 @@ Credencial pública exclusivamente demonstrativa e local:
 | Organização B | `ADMIN` | `admin.b@demo.ciclera.local` |
 | Organização B | `TECHNICIAN` | `technician.b@demo.ciclera.local` |
 
-Todos usam a senha demonstrativa `CicleraLocalOnly!2026`. Ela é pública, não é secret e nunca deve ser reutilizada fora do ambiente local. O banco persiste somente hashes Argon2id com salts independentes. O seed não cria autenticação nem endpoints; o uso dessas credenciais para login pertence ao checkpoint de autenticação.
+Todos usam a senha demonstrativa `CicleraLocalOnly!2026`. Ela é pública, não é secret e nunca deve ser reutilizada fora do ambiente local. O banco persiste somente hashes Argon2id com salts independentes. Após executar o seed, essas contas podem ser usadas somente no login local documentado abaixo.
+
+Exemplo manual sem expor tokens no terminal; o arquivo temporário recebe os
+cookies e deve ser removido ao final:
+
+```bash
+curl -i -c .ciclera-local-cookies.txt \
+  -H "Origin: http://localhost:3000" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"owner.a@demo.ciclera.local","password":"CicleraLocalOnly!2026"}' \
+  http://localhost:3333/api/v1/auth/login
+
+curl -i -b .ciclera-local-cookies.txt \
+  http://localhost:3333/api/v1/auth/me
+
+curl -i -b .ciclera-local-cookies.txt -c .ciclera-local-cookies.txt \
+  -H "Origin: http://localhost:3000" \
+  -X POST http://localhost:3333/api/v1/auth/refresh
+
+curl -i -b .ciclera-local-cookies.txt -c .ciclera-local-cookies.txt \
+  -H "Origin: http://localhost:3000" \
+  -X POST http://localhost:3333/api/v1/auth/logout
+```
+
+`.ciclera-local-cookies.txt` está ignorado pelo Git e deve ser removido depois
+do teste porque contém credenciais temporárias de sessão.
 
 O `npm run test:integration` aplica migrations e executa o seed duas vezes somente em `TEST_DATABASE_URL`. O teste valida perfis, isolamento, unicidade, hashes e bloqueios de ambiente, e remove apenas os IDs reservados criados pelo próprio seed.
 
