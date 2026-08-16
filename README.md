@@ -90,6 +90,8 @@ cp .env.example .env
 docker compose up -d --wait postgres
 npm run db:check
 npm run db:check:test
+npm run db:migrate:dev
+npm run test:integration
 npm run start:dev
 ```
 
@@ -129,7 +131,7 @@ Por padrão, a porta `5432` do container é publicada como `55432` no host para 
 O container cria dois bancos distintos na primeira inicialização do volume:
 
 - `ciclera_dev`: desenvolvimento local, acessado por `DATABASE_URL`.
-- `ciclera_test`: testes automatizados futuros, acessado por `TEST_DATABASE_URL`.
+- `ciclera_test`: migrations e testes automatizados de integração, acessado exclusivamente por `TEST_DATABASE_URL`.
 
 Antes de iniciar, copie `.env.example` para `.env` e substitua a senha fictícia nas três ocorrências: `POSTGRES_PASSWORD`, `DATABASE_URL` e `TEST_DATABASE_URL`.
 
@@ -181,7 +183,12 @@ docker compose up -d --wait postgres
 | `npm run typecheck` | Validar tipos sem gerar build |
 | `npm run db:check` | Validar a conexão Node.js com o banco de desenvolvimento |
 | `npm run db:check:test` | Validar a conexão Node.js com o banco de testes separado |
+| `npm run db:migrate:dev` | Criar e aplicar migrations no banco local de desenvolvimento |
+| `npm run db:migrate:deploy` | Aplicar migrations já versionadas no ambiente selecionado |
+| `npm run prisma:generate` | Gerar o Prisma Client a partir do schema versionado |
+| `npm run prisma:validate` | Validar o schema Prisma sem alterar o banco |
 | `npm test` | Executar testes unitários |
+| `npm run test:integration` | Aplicar migrations e executar testes isolados em `TEST_DATABASE_URL` |
 | `npm run test:watch` | Executar testes em modo interativo |
 | `npm run test:e2e` | Executar os testes HTTP end-to-end da fundação da API |
 | `npm run format` | Formatar os arquivos TypeScript |
@@ -193,7 +200,7 @@ Não documentar scripts inexistentes indefinidamente. Criá-los ou atualizar a t
 
 Manter um `.env.example` versionado e uma validação executada antes da aplicação iniciar.
 
-No CP-03, as variáveis da fundação HTTP e da infraestrutura PostgreSQL presentes em `.env.example` estão ativas. Variáveis de autenticação, storage, e-mail e Prisma documentadas adiante continuam reservadas aos checkpoints correspondentes.
+As variáveis da fundação HTTP, da infraestrutura PostgreSQL e do Prisma presentes em `.env.example` estão ativas. Variáveis de autenticação, storage e e-mail documentadas adiante continuam reservadas aos checkpoints correspondentes.
 
 ### Aplicação e banco
 
@@ -1355,6 +1362,29 @@ Regras:
 
 ## Banco de dados e Prisma
 
+O schema inicial de identidade usa Prisma `6.19.3`, fixado junto com o client para preservar a arquitetura NestJS/CommonJS já aprovada. Uma migração futura para o Prisma 7 exige tratar separadamente ESM e driver adapter e não faz parte do CP-05.
+
+O modelo atual contém `Organization`, `User`, `Session` e `PasswordResetToken`. As decisões vigentes são:
+
+- IDs UUID e timestamps PostgreSQL com timezone.
+- Cada usuário pertence obrigatoriamente a uma única organização.
+- `normalizedEmail` é globalmente único; a camada de aplicação deverá normalizar o e-mail antes da persistência.
+- Relações compostas por `organizationId` e `userId` impedem que sessões e tokens de redefinição sejam vinculados a usuário de outra organização.
+- Somente hashes de senha, refresh token e token de redefinição são persistidos; valores em texto puro não pertencem ao schema.
+- Sessões registram expiração, família do refresh token, último uso, revogação e motivo da revogação.
+- O `PrismaService` pertence à infraestrutura, seleciona `TEST_DATABASE_URL` em `NODE_ENV=test` e encerra o client no graceful shutdown.
+
+Para validar o schema e aplicar a migration inicial:
+
+```bash
+npm run prisma:validate
+npm run prisma:generate
+npm run db:migrate:dev
+npm run test:integration
+```
+
+O executor de integração recusa bancos remotos, exige que os bancos de desenvolvimento e teste tenham nomes distintos e confirma o banco conectado antes de escrever. Ele aplica migrations e executa o Jest somente com `TEST_DATABASE_URL`; a limpeza é restrita aos registros criados pelo próprio teste.
+
 ### Migrations
 
 - Toda alteração de schema passa por migration versionada.
@@ -1608,7 +1638,9 @@ A API está pronta para piloto quando:
 ```bash
 npm run lint
 npm run typecheck
+npm run prisma:validate
 npm test
+npm run test:integration
 npm run build
 ```
 

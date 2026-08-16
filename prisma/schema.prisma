@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  TECHNICIAN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Organization {
+  id        String             @id @default(uuid()) @db.Uuid
+  name      String             @db.VarChar(160)
+  timezone  String             @default("America/Sao_Paulo") @db.VarChar(64)
+  status    OrganizationStatus @default(ACTIVE)
+  users     User[]
+  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status])
+  @@map("organizations")
+}
+
+model User {
+  id                   String               @id @default(uuid()) @db.Uuid
+  organizationId       String               @map("organization_id") @db.Uuid
+  organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  name                 String               @db.VarChar(160)
+  email                String               @db.VarChar(320)
+  normalizedEmail      String               @unique @map("normalized_email") @db.VarChar(320)
+  passwordHash         String               @map("password_hash") @db.VarChar(255)
+  role                 UserRole             @default(TECHNICIAN)
+  status               UserStatus           @default(ACTIVE)
+  lastLoginAt          DateTime?             @map("last_login_at") @db.Timestamptz(6)
+  sessions             Session[]
+  passwordResetTokens  PasswordResetToken[]
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, status, role])
+  @@map("users")
+}
+
+model Session {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  user              User      @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  refreshTokenHash  String    @unique @map("refresh_token_hash") @db.VarChar(255)
+  familyId          String    @default(uuid()) @map("family_id") @db.Uuid
+  expiresAt         DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revocationReason  String?   @map("revocation_reason") @db.VarChar(160)
+  lastUsedAt        DateTime? @map("last_used_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([organizationId, userId, revokedAt, expiresAt])
+  @@index([familyId])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  user           User      @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  tokenHash      String    @unique @map("token_hash") @db.VarChar(255)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt         DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([organizationId, userId, usedAt, expiresAt])
+  @@map("password_reset_tokens")
+}
