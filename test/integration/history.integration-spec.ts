@@ -136,7 +136,7 @@ describe('Operational history', () => {
         (entry, index) =>
           index === 0 ||
           new Date(entry.occurredAt).getTime() >=
-            new Date(result.timeline[index - 1]!.occurredAt).getTime(),
+            new Date(result.timeline[index - 1].occurredAt).getTime(),
       ),
     ).toBe(true);
     expect(result.timeline.every((entry) => entry.actor.name.length > 0)).toBe(
