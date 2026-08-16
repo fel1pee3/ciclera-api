@@ -47,6 +47,13 @@ import {
   ChecklistResponseInvalidError,
 } from '../work-orders/domain/work-order.errors';
 import { ChecklistDefinitionInvalidError } from '../checklists/domain/checklist.errors';
+import {
+  EvidenceLimitExceededError,
+  EvidenceNotFoundError,
+  EvidenceObjectMismatchError,
+  EvidenceTokenInvalidError,
+  EvidenceTypeInvalidError,
+} from '../evidence/domain/evidence.errors';
 
 export interface ProblemDetails {
   type: string;
@@ -373,6 +380,45 @@ function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
     };
   }
 
+  if (
+    exception instanceof EvidenceNotFoundError ||
+    exception instanceof EvidenceTokenInvalidError
+  ) {
+    return {
+      type: 'https://ciclera.com.br/problems/evidence-not-found',
+      title: 'Evidência não encontrada',
+      detail: 'A evidência solicitada não está disponível.',
+      code: 'EVIDENCE_NOT_FOUND',
+    };
+  }
+
+  if (exception instanceof EvidenceLimitExceededError) {
+    return {
+      type: 'https://ciclera.com.br/problems/evidence-limit-exceeded',
+      title: 'Limite de evidências atingido',
+      detail: 'Remova uma evidência antes de adicionar outra.',
+      code: 'EVIDENCE_LIMIT_EXCEEDED',
+    };
+  }
+
+  if (exception instanceof EvidenceObjectMismatchError) {
+    return {
+      type: 'https://ciclera.com.br/problems/evidence-object-mismatch',
+      title: 'Upload não confirmado',
+      detail: 'O arquivo enviado não corresponde ao upload solicitado.',
+      code: 'EVIDENCE_OBJECT_MISMATCH',
+    };
+  }
+
+  if (exception instanceof EvidenceTypeInvalidError) {
+    return {
+      type: 'https://ciclera.com.br/problems/evidence-type-invalid',
+      title: 'Arquivo não permitido',
+      detail: 'O tipo ou tamanho do arquivo não é permitido.',
+      code: 'EVIDENCE_TYPE_INVALID',
+    };
+  }
+
   if (!(exception instanceof HttpException)) {
     return {};
   }
@@ -572,6 +618,24 @@ function getHttpStatus(exception: unknown): number {
     exception instanceof ChecklistDefinitionInvalidError ||
     exception instanceof ChecklistResponseInvalidError
   ) {
+    return HttpStatus.UNPROCESSABLE_ENTITY;
+  }
+
+  if (
+    exception instanceof EvidenceNotFoundError ||
+    exception instanceof EvidenceTokenInvalidError
+  ) {
+    return HttpStatus.NOT_FOUND;
+  }
+
+  if (
+    exception instanceof EvidenceLimitExceededError ||
+    exception instanceof EvidenceObjectMismatchError
+  ) {
+    return HttpStatus.CONFLICT;
+  }
+
+  if (exception instanceof EvidenceTypeInvalidError) {
     return HttpStatus.UNPROCESSABLE_ENTITY;
   }
 

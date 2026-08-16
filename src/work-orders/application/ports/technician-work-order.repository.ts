@@ -59,6 +59,15 @@ export interface WorkOrderExecution {
     responses: ChecklistAnswer[];
     missingRequiredFieldIds: string[];
   } | null;
+  evidence: Array<{
+    id: string;
+    kind: 'PHOTO' | 'SIGNATURE';
+    fileName: string;
+    contentType: string;
+    sizeBytes: bigint;
+    confirmedAt: Date;
+    createdAt: Date;
+  }>;
 }
 
 export type TechnicianExecutionMutationResult =

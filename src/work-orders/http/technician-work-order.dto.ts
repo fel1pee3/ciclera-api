@@ -96,6 +96,7 @@ export class WorkOrderExecutionResponseDto {
   @ApiProperty({ format: 'date-time' }) startedAt!: Date;
   @ApiProperty({ format: 'date-time' }) updatedAt!: Date;
   @ApiProperty({ nullable: true }) checklist!: unknown;
+  @ApiProperty({ type: [Object] }) evidence!: unknown[];
 }
 
 export class ChecklistAnswerDto {

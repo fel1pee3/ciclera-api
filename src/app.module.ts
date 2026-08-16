@@ -7,6 +7,7 @@ import { validateEnvironment } from './config/environment';
 import { CustomersModule } from './customers/customers.module';
 import { ChecklistsModule } from './checklists/checklists.module';
 import { EquipmentModule } from './equipment/equipment.module';
+import { EvidenceModule } from './evidence/evidence.module';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './infrastructure/database/prisma/prisma.module';
 import { StructuredLoggerService } from './observability/structured-logger.service';
@@ -36,6 +37,7 @@ import { WorkOrdersModule } from './work-orders/work-orders.module';
     ChecklistsModule,
     EquipmentModule,
     WorkOrdersModule,
+    EvidenceModule,
     HealthModule,
   ],
   providers: [StructuredLoggerService],

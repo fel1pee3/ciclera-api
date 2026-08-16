@@ -22,6 +22,11 @@ import { PrismaWorkOrderRepository } from './infrastructure/prisma-work-order.re
       useClass: PrismaTechnicianWorkOrderRepository,
     },
   ],
-  exports: [WorkOrdersService, WORK_ORDER_REPOSITORY],
+  exports: [
+    WorkOrdersService,
+    TechnicianWorkOrdersService,
+    WORK_ORDER_REPOSITORY,
+    TECHNICIAN_WORK_ORDER_REPOSITORY,
+  ],
 })
 export class WorkOrdersModule {}

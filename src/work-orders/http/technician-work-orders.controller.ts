@@ -127,5 +127,17 @@ export class TechnicianWorkOrdersController {
 function toResponse(
   workOrder: Awaited<ReturnType<TechnicianWorkOrdersService['find']>>,
 ): TechnicianWorkOrderResponseDto {
-  return { ...workOrder, number: formatWorkOrderNumber(workOrder.number) };
+  return {
+    ...workOrder,
+    number: formatWorkOrderNumber(workOrder.number),
+    execution: workOrder.execution
+      ? {
+          ...workOrder.execution,
+          evidence: workOrder.execution.evidence.map((item) => ({
+            ...item,
+            sizeBytes: item.sizeBytes.toString(),
+          })),
+        }
+      : null,
+  };
 }

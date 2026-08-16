@@ -267,6 +267,9 @@ Os cookies são host-only, `HttpOnly` e `SameSite=Strict`. `Secure` é derivado 
 | `STORAGE_FORCE_PATH_STYLE` | Conforme provedor | Compatibilidade com storage S3-like local |
 | `UPLOAD_MAX_FILE_SIZE_BYTES` | Sim | Limite server-side por arquivo |
 | `UPLOAD_ALLOWED_MIME_TYPES` | Sim | Tipos MIME aceitos |
+| `UPLOAD_MAX_FILES_PER_EXECUTION` | Sim | Quantidade máxima de evidências por execução |
+| `EVIDENCE_URL_TTL` | Sim | Validade das capacidades temporárias de upload e leitura |
+| `EVIDENCE_STORAGE_ROOT` | Desenvolvimento | Diretório local privado do adapter de desenvolvimento |
 
 ### E-mail
 
@@ -1213,11 +1216,12 @@ POST  /api/v1/work-orders/:workOrderId/submit-for-review
 ### Evidências
 
 ```text
-POST   /api/v1/work-orders/:workOrderId/evidence/upload-intents
-POST   /api/v1/work-orders/:workOrderId/evidence/:evidenceId/confirm
-GET    /api/v1/work-orders/:workOrderId/evidence
-GET    /api/v1/work-orders/:workOrderId/evidence/:evidenceId/access
-DELETE /api/v1/work-orders/:workOrderId/evidence/:evidenceId
+POST   /api/v1/field/work-orders/:workOrderId/execution/evidence/intents
+PUT    /api/v1/field/evidence/:evidenceId/upload?token=...
+POST   /api/v1/field/work-orders/:workOrderId/execution/evidence/:evidenceId/confirm
+GET    /api/v1/field/evidence/:evidenceId/read-url
+GET    /api/v1/field/evidence/:evidenceId/content?token=...
+DELETE /api/v1/field/work-orders/:workOrderId/execution/evidence/:evidenceId
 ```
 
 Exclusão só é permitida enquanto a execução puder ser editada e pelo ator autorizado. Depois da submissão, seguir regra de correção e preservar auditoria.
@@ -1338,23 +1342,27 @@ Evitar um form builder genérico e ilimitado no MVP. Implementar apenas os tipos
 
 O bucket deve ser privado.
 
+No desenvolvimento, a porta `EvidenceStorage` usa um diretório local privado,
+configurado por `EVIDENCE_STORAGE_ROOT`, fora de qualquer pasta servida pela web e
+ignorado pelo Git. O adapter preserva a semântica de object key, verificação de
+metadata e exclusão; produção deverá substituir apenas o adapter por um storage
+privado compatível. Os bytes nunca são gravados no PostgreSQL.
+
 ### Fluxo de upload recomendado
 
 1. Usuário solicita um upload intent para uma ordem autorizada.
 2. API valida tenant, atribuição, status, MIME type e tamanho declarado.
-3. API cria uma evidência com status `PENDING_UPLOAD` e object key gerada pelo servidor.
+3. API cria uma evidência com status `PENDING` e object key gerada pelo servidor.
 4. API retorna URL assinada de curta duração.
-5. Navegador envia o arquivo diretamente ao storage.
+5. No adapter local, o navegador envia o arquivo para a rota temporária da API, que o grava no storage privado.
 6. Navegador confirma o upload na API.
 7. API verifica o objeto e altera o status para `AVAILABLE`.
 
 Estados mínimos sugeridos:
 
 ```text
-PENDING_UPLOAD
+PENDING
 AVAILABLE
-FAILED
-REMOVED
 ```
 
 ### Regras de segurança

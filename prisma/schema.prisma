@@ -46,6 +46,16 @@ enum WorkOrderPriority {
   URGENT
 }
 
+enum EvidenceKind {
+  PHOTO
+  SIGNATURE
+}
+
+enum EvidenceStatus {
+  PENDING
+  AVAILABLE
+}
+
 model Organization {
   id                     String                   @id @default(uuid()) @db.Uuid
   name                   String                   @db.VarChar(160)
@@ -62,6 +72,7 @@ model Organization {
   workOrderExecutions    WorkOrderExecution[]
   checklistTemplates     ChecklistTemplate[]
   checklistResponses     ChecklistResponse[]
+  evidence               Evidence[]
   workOrderCounter       WorkOrderCounter?
   createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -181,6 +192,7 @@ model User {
   closedAssignments         WorkOrderAssignment[]    @relation("WorkOrderAssignmentCloser")
   workOrderExecutions       WorkOrderExecution[]     @relation("WorkOrderExecutionTechnician")
   createdChecklistTemplates ChecklistTemplate[]      @relation("ChecklistTemplateCreator")
+  createdEvidence           Evidence[]               @relation("EvidenceCreator")
   createdAt                 DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -231,6 +243,7 @@ model WorkOrder {
   statusHistory         WorkOrderStatusHistory[]
   assignments           WorkOrderAssignment[]
   execution             WorkOrderExecution?
+  evidence              Evidence[]
   createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -277,6 +290,7 @@ model WorkOrderExecution {
   checklistTemplate   ChecklistTemplate?  @relation(fields: [organizationId, checklistTemplateId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
   checklistSnapshot   Json?               @map("checklist_snapshot")
   checklistResponses  ChecklistResponse[]
+  evidence            Evidence[]
   version             Int                 @default(1)
   startedAt           DateTime            @default(now()) @map("started_at") @db.Timestamptz(6)
   createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -286,6 +300,32 @@ model WorkOrderExecution {
   @@unique([organizationId, workOrderId])
   @@index([organizationId, technicianId, updatedAt(sort: Desc), id])
   @@map("work_order_executions")
+}
+
+model Evidence {
+  id              String             @id @default(uuid()) @db.Uuid
+  organizationId  String             @map("organization_id") @db.Uuid
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrderId     String             @map("work_order_id") @db.Uuid
+  workOrder       WorkOrder          @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  executionId     String             @map("execution_id") @db.Uuid
+  execution       WorkOrderExecution @relation(fields: [organizationId, executionId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  createdByUserId String             @map("created_by_user_id") @db.Uuid
+  createdBy       User               @relation("EvidenceCreator", fields: [organizationId, createdByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  kind            EvidenceKind
+  status          EvidenceStatus     @default(PENDING)
+  objectKey       String             @unique @map("object_key") @db.VarChar(500)
+  fileName        String             @map("file_name") @db.VarChar(255)
+  contentType     String             @map("content_type") @db.VarChar(120)
+  sizeBytes       BigInt             @map("size_bytes")
+  confirmedAt     DateTime?          @map("confirmed_at") @db.Timestamptz(6)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, workOrderId, status, createdAt])
+  @@index([organizationId, executionId, status, createdAt])
+  @@map("evidence")
 }
 
 model ChecklistTemplate {

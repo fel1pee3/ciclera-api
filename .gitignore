@@ -17,6 +17,7 @@ npm-debug.log*
 
 # Local authentication artifacts
 .ciclera-local-cookies.txt
+.local/
 
 # Editors and operating systems
 .idea/

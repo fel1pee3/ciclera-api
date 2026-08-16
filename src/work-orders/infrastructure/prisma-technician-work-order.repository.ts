@@ -54,6 +54,19 @@ const technicianWorkOrderSelect = {
         select: { fieldId: true, value: true },
         orderBy: { fieldId: 'asc' },
       },
+      evidence: {
+        where: { status: 'AVAILABLE' },
+        select: {
+          id: true,
+          kind: true,
+          fileName: true,
+          contentType: true,
+          sizeBytes: true,
+          confirmedAt: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      },
     },
   },
 } as const;
@@ -447,7 +460,7 @@ function mapTechnicianWorkOrder(
   }>,
 ): TechnicianWorkOrder {
   if (!workOrder.execution) return { ...workOrder, execution: null };
-  const { checklistSnapshot, checklistResponses, ...execution } =
+  const { checklistSnapshot, checklistResponses, evidence, ...execution } =
     workOrder.execution;
   const snapshot = checklistSnapshot as unknown as ChecklistSnapshot | null;
   const responses = checklistResponses.map((response) => ({
@@ -458,6 +471,10 @@ function mapTechnicianWorkOrder(
     ...workOrder,
     execution: {
       ...execution,
+      evidence: evidence.map((item) => ({
+        ...item,
+        confirmedAt: item.confirmedAt as Date,
+      })),
       checklist: snapshot
         ? {
             snapshot,
