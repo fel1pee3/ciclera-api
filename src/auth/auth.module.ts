@@ -125,6 +125,7 @@ import { readEnvironment } from '../config/environment';
     RolesGuard,
     SESSION_RESOLVER,
     AUTHENTICATED_USER_REPOSITORY,
+    PASSWORD_HASHER,
   ],
 })
 export class AuthModule {}

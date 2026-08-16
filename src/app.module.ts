@@ -7,6 +7,7 @@ import { validateEnvironment } from './config/environment';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './infrastructure/database/prisma/prisma.module';
 import { StructuredLoggerService } from './observability/structured-logger.service';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { StructuredLoggerService } from './observability/structured-logger.servi
     ]),
     PrismaModule,
     AuthModule,
+    UsersModule,
     HealthModule,
   ],
   providers: [StructuredLoggerService],

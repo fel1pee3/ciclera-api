@@ -710,6 +710,12 @@ inválidos, expirados, substituídos ou já utilizados recebem o mesmo erro púb
 
 RBAC não é suficiente sozinho. Além do perfil, toda operação deve verificar o relacionamento com o recurso.
 
+Política de equipe implementada: `OWNER` pode gerenciar qualquer perfil;
+`ADMIN` pode listar a equipe, mas só pode criar, consultar individualmente,
+editar, ativar ou desativar usuários `TECHNICIAN`; `TECHNICIAN` não acessa a
+gestão de usuários. A organização vem exclusivamente do principal autenticado.
+O último `OWNER` ativo não pode ser desativado nem rebaixado.
+
 Exemplos:
 
 - Um `TECHNICIAN` só acessa uma ordem atribuída a ele e pertencente à sua organização.
@@ -1108,6 +1114,12 @@ POST  /api/v1/users/:userId/deactivate
 POST  /api/v1/users/:userId/activate
 ```
 
+`GET /users` aceita `page`, `pageSize`, `search`, `role` e `status`, sempre com
+paginação no banco. `POST /users` recebe `name`, `email`, `password` e `role`; a
+senha é convertida em Argon2id antes da persistência e nunca aparece na resposta.
+`PATCH /users/:userId` altera somente nome e perfil. Desativar revoga todas as
+sessões ainda ativas do usuário. O e-mail normalizado permanece globalmente único.
+
 ### Clientes, locais e equipamentos
 
 ```text
@@ -1479,7 +1491,8 @@ Regras:
 
 O schema inicial de identidade usa Prisma `6.19.3`, fixado junto com o client para preservar a arquitetura NestJS/CommonJS já aprovada. Uma migração futura para o Prisma 7 exige tratar separadamente ESM e driver adapter e não faz parte do CP-05.
 
-O modelo atual contém `Organization`, `User`, `Session` e `PasswordResetToken`. As decisões vigentes são:
+O modelo atual contém `Organization`, `User`, `Session`, `PasswordResetToken` e
+`AuditLog`. As decisões vigentes são:
 
 - IDs UUID e timestamps PostgreSQL com timezone.
 - Cada usuário pertence obrigatoriamente a uma única organização.
@@ -1487,6 +1500,8 @@ O modelo atual contém `Organization`, `User`, `Session` e `PasswordResetToken`.
 - Relações compostas por `organizationId` e `userId` impedem que sessões e tokens de redefinição sejam vinculados a usuário de outra organização.
 - Somente hashes de senha, refresh token e token de redefinição são persistidos; valores em texto puro não pertencem ao schema.
 - Sessões registram expiração, família do refresh token, último uso, revogação e motivo da revogação.
+- Criação de usuário e mudanças de perfil ou status geram auditoria transacional
+  com tenant, ator, recurso, request ID e metadata limitada, sem senha ou hash.
 - O `PrismaService` pertence à infraestrutura, seleciona `TEST_DATABASE_URL` em `NODE_ENV=test` e encerra o client no graceful shutdown.
 
 Para validar o schema e aplicar a migration inicial:

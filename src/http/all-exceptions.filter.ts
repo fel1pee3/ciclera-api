@@ -13,6 +13,13 @@ import {
   InvalidPasswordResetTokenError,
   PasswordResetDeliveryUnavailableError,
 } from '../auth/domain/password-reset.errors';
+import {
+  EmptyUserUpdateError,
+  LastOwnerRequiredError,
+  ManagedUserNotFoundError,
+  UserEmailAlreadyInUseError,
+  UserManagementForbiddenError,
+} from '../users/domain/user-management.errors';
 
 export interface ProblemDetails {
   type: string;
@@ -101,6 +108,51 @@ function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
       title: 'Recuperação indisponível',
       detail: 'Não foi possível enviar as instruções de recuperação.',
       code: 'PASSWORD_RESET_UNAVAILABLE',
+    };
+  }
+
+  if (exception instanceof ManagedUserNotFoundError) {
+    return {
+      type: 'https://ciclera.com.br/problems/user-not-found',
+      title: 'Usuário não encontrado',
+      detail: 'O usuário solicitado não foi encontrado.',
+      code: 'USER_NOT_FOUND',
+    };
+  }
+
+  if (exception instanceof UserEmailAlreadyInUseError) {
+    return {
+      type: 'https://ciclera.com.br/problems/email-already-in-use',
+      title: 'E-mail indisponível',
+      detail: 'Já existe um usuário com este e-mail.',
+      code: 'EMAIL_ALREADY_IN_USE',
+    };
+  }
+
+  if (exception instanceof LastOwnerRequiredError) {
+    return {
+      type: 'https://ciclera.com.br/problems/last-owner-required',
+      title: 'Último proprietário protegido',
+      detail: 'A organização deve manter ao menos um proprietário ativo.',
+      code: 'LAST_OWNER_REQUIRED',
+    };
+  }
+
+  if (exception instanceof UserManagementForbiddenError) {
+    return {
+      type: 'https://ciclera.com.br/problems/user-management-forbidden',
+      title: 'Acesso negado',
+      detail: 'Seu perfil não pode gerenciar este usuário.',
+      code: 'USER_MANAGEMENT_FORBIDDEN',
+    };
+  }
+
+  if (exception instanceof EmptyUserUpdateError) {
+    return {
+      type: 'https://ciclera.com.br/problems/empty-user-update',
+      title: 'Dados inválidos',
+      detail: 'Informe ao menos um campo para alteração.',
+      code: 'EMPTY_USER_UPDATE',
     };
   }
 
@@ -220,6 +272,26 @@ function getHttpStatus(exception: unknown): number {
 
   if (exception instanceof PasswordResetDeliveryUnavailableError) {
     return HttpStatus.SERVICE_UNAVAILABLE;
+  }
+
+  if (exception instanceof ManagedUserNotFoundError) {
+    return HttpStatus.NOT_FOUND;
+  }
+
+  if (exception instanceof UserEmailAlreadyInUseError) {
+    return HttpStatus.CONFLICT;
+  }
+
+  if (exception instanceof LastOwnerRequiredError) {
+    return HttpStatus.CONFLICT;
+  }
+
+  if (exception instanceof UserManagementForbiddenError) {
+    return HttpStatus.FORBIDDEN;
+  }
+
+  if (exception instanceof EmptyUserUpdateError) {
+    return HttpStatus.UNPROCESSABLE_ENTITY;
   }
 
   if (exception instanceof HttpException) {
