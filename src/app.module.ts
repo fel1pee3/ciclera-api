@@ -17,6 +17,7 @@ import { WorkOrdersModule } from './work-orders/work-orders.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { BillingModule } from './billing/billing.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { HistoryModule } from './history/history.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     ReviewsModule,
     BillingModule,
     DashboardModule,
+    HistoryModule,
     HealthModule,
   ],
   providers: [StructuredLoggerService],
