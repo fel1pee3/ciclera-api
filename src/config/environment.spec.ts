@@ -1,4 +1,8 @@
-import { validateEnvironment } from './environment';
+import {
+  EnvironmentVariables,
+  getRuntimeDatabaseUrl,
+  validateEnvironment,
+} from './environment';
 
 const validEnvironment = {
   NODE_ENV: 'development',
@@ -53,5 +57,17 @@ describe('validateEnvironment', () => {
         CORS_ORIGINS: 'http://localhost:3000/private',
       }),
     ).toThrow(/CORS_ORIGINS/);
+  });
+
+  it('never falls back to the development database during tests', () => {
+    const environment: EnvironmentVariables = {
+      ...validateEnvironment(validEnvironment),
+      NODE_ENV: 'test',
+      TEST_DATABASE_URL: undefined,
+    };
+
+    expect(() => getRuntimeDatabaseUrl(environment)).toThrow(
+      'TEST_DATABASE_URL is required in test.',
+    );
   });
 });

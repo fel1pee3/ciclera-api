@@ -4,6 +4,7 @@ import {
   ApiServiceUnavailableResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Public } from '../auth/http/public.decorator';
 import { DatabaseHealthService } from './database-health.service';
 
 interface LiveHealthResponse {
@@ -17,6 +18,7 @@ interface ReadyHealthResponse extends LiveHealthResponse {
 }
 
 @ApiTags('health')
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly databaseHealthService: DatabaseHealthService) {}

@@ -6,6 +6,7 @@ import { IsString, MinLength } from 'class-validator';
 import request from 'supertest';
 import { configureApplication } from '../src/application';
 import { AppModule } from '../src/app.module';
+import { Public } from '../src/auth/http/public.decorator';
 import { NodeEnvironment, readEnvironment } from '../src/config/environment';
 import { DatabaseHealthService } from '../src/health/database-health.service';
 
@@ -15,6 +16,7 @@ class TestOnlyDto {
   name!: string;
 }
 
+@Public()
 @Controller('test-only')
 class TestOnlyController {
   @Get('prefix')

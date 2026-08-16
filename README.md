@@ -585,6 +585,34 @@ Esse contexto deve ser produzido por código confiável após validação da ses
 - Casos de uso recebem explicitamente o ator e o escopo necessários.
 - Jobs futuros devem carregar um contexto equivalente de forma verificável.
 
+### Fundação de autorização implementada
+
+O `AuthModule` disponibiliza a fundação transversal sem antecipar o login do
+CP-08:
+
+- `AuthenticatedPrincipal` contém apenas `userId`, `organizationId`, `role` e
+  `sessionId` obtidos de fontes confiáveis.
+- `AuthenticationGuard` depende de portas para resolver uma sessão válida e
+  consultar novamente o usuário dentro da organização da sessão.
+- Os guards de autenticação e perfis são globais e fail-closed; rotas públicas
+  precisam do decorator explícito `Public`, atualmente limitado aos health
+  checks e ao código exclusivo de testes.
+- Usuário inexistente ou inativo e organização inativa recebem o mesmo erro
+  genérico `401`, sem revelar identidade, tenant ou status da conta.
+- `CurrentPrincipal` entrega o principal tipado aos controllers protegidos.
+- `RolesGuard` e `Roles` aplicam `OWNER`, `ADMIN` e `TECHNICIAN` sem consultar
+  headers livres de perfil ou organização.
+- O repositório Prisma de identidade exige `{ organizationId, userId }`, usa a
+  chave composta e seleciona somente os campos necessários à autorização.
+- Recursos ausentes dentro do tenant autorizado permanecem `404`; falta de
+  autenticação é `401` e falta de permissão de perfil é `403`, todos no formato
+  centralizado de erro.
+
+Até o CP-08, o adapter de sessão registrado pela aplicação recusa todas as
+requisições protegidas. Ele existe deliberadamente para que nenhuma credencial
+seja aceita antes da implementação e validação do access token e da sessão. O
+CP-07 não cria endpoints de autenticação nem altera os health checks.
+
 ## Autorização e RBAC
 
 | Operação | `OWNER` | `ADMIN` | `TECHNICIAN` |

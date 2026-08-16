@@ -101,7 +101,11 @@ export function getRuntimeDatabaseUrl(
   environment: EnvironmentVariables,
 ): string {
   if (environment.NODE_ENV === 'test') {
-    return environment.TEST_DATABASE_URL ?? environment.DATABASE_URL;
+    if (!environment.TEST_DATABASE_URL) {
+      throw new Error('TEST_DATABASE_URL is required in test.');
+    }
+
+    return environment.TEST_DATABASE_URL;
   }
 
   return environment.DATABASE_URL;
