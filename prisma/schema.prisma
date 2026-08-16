@@ -97,6 +97,7 @@ model Organization {
   evidence               Evidence[]
   additionalItems        AdditionalItem[]
   reviews                Review[]
+  initialDataImports     InitialDataImport[]
   workOrderCounter       WorkOrderCounter?
   createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -221,6 +222,7 @@ model User {
   updatedAdditionalItems    AdditionalItem[]         @relation("AdditionalItemUpdater")
   reviewsCreated            Review[]                 @relation("ReviewActor")
   billedWorkOrders          WorkOrder[]              @relation("WorkOrderBiller")
+  initialDataImports        InitialDataImport[]       @relation("InitialDataImportCreator")
   createdAt                 DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -515,4 +517,19 @@ model PasswordResetToken {
 
   @@index([organizationId, userId, usedAt, expiresAt])
   @@map("password_reset_tokens")
+}
+
+model InitialDataImport {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @map("organization_id") @db.Uuid
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  checksum        String       @db.Char(64)
+  createdByUserId String       @map("created_by_user_id") @db.Uuid
+  createdBy       User         @relation("InitialDataImportCreator", fields: [organizationId, createdByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  result          Json
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, checksum])
+  @@index([organizationId, createdAt(sort: Desc), id])
+  @@map("initial_data_imports")
 }

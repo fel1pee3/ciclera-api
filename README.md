@@ -125,6 +125,24 @@ O OpenAPI é montado em `/docs` somente com `NODE_ENV=development`. Em `test` e 
 - Logs são JSON estruturado e não registram headers, body ou query string. Chaves sensíveis, URLs do PostgreSQL e URLs assinadas são redigidas.
 - O encerramento gracioso fecha o pool usado pelo readiness e os hooks do NestJS.
 
+### Importação inicial assistida
+
+O fluxo de implantação inicial é exclusivo de `OWNER` e usa o modelo CSV oficial
+com separador `;`, codificação UTF-8 e as colunas `type`, `external_key`,
+`parent_external_key`, `name`, `document`, endereço e identificação do
+equipamento. O limite é de 90 KB e 500 linhas.
+
+| Método | Rota | Finalidade |
+| --- | --- | --- |
+| `GET` | `/api/v1/imports/initial-data/template.csv` | Baixar o modelo oficial |
+| `POST` | `/api/v1/imports/initial-data/preview` | Validar o arquivo sem persistir |
+| `POST` | `/api/v1/imports/initial-data/commit` | Importar clientes, locais e equipamentos após a prévia |
+
+A confirmação exige o checksum SHA-256 devolvido pela prévia. A gravação é
+atômica, revalida conflitos dentro da transação, é isolada por organização e
+não duplica dados quando o mesmo arquivo é reenviado. Arquivos temporários não
+são persistidos.
+
 ## PostgreSQL local
 
 O PostgreSQL local pertence à infraestrutura da API e está definido em `compose.yaml`. A porta é publicada somente em `127.0.0.1`, as credenciais ficam no `.env` ignorado pelo Git e os dados persistem no volume nomeado `ciclera-api-postgres-data`.

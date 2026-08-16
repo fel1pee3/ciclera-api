@@ -19,6 +19,7 @@ import { BillingModule } from './billing/billing.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { HistoryModule } from './history/history.module';
 import { ReportsModule } from './reports/reports.module';
+import { ImportsModule } from './imports/imports.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { ReportsModule } from './reports/reports.module';
     DashboardModule,
     HistoryModule,
     ReportsModule,
+    ImportsModule,
     HealthModule,
   ],
   providers: [StructuredLoggerService],
