@@ -10,6 +10,7 @@ import { HealthModule } from './health/health.module';
 import { PrismaModule } from './infrastructure/database/prisma/prisma.module';
 import { StructuredLoggerService } from './observability/structured-logger.service';
 import { UsersModule } from './users/users.module';
+import { WorkOrdersModule } from './work-orders/work-orders.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     CustomersModule,
     EquipmentModule,
+    WorkOrdersModule,
     HealthModule,
   ],
   providers: [StructuredLoggerService],

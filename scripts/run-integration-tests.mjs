@@ -63,7 +63,12 @@ run(seedRunner, ['test'], testEnvironment);
 run(seedRunner, ['test'], testEnvironment);
 run(
   jestCli,
-  ['--config', './test/jest-integration.json', '--runInBand'],
+  [
+    '--config',
+    './test/jest-integration.json',
+    '--runInBand',
+    ...process.argv.slice(2),
+  ],
   testEnvironment,
 );
 

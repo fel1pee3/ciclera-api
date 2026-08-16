@@ -28,18 +28,39 @@ enum ServiceLocationStatus {
   INACTIVE
 }
 
+enum WorkOrderStatus {
+  DRAFT
+  SCHEDULED
+  IN_PROGRESS
+  AWAITING_REVIEW
+  PENDING_CORRECTION
+  READY_TO_BILL
+  BILLED
+  CANCELED
+}
+
+enum WorkOrderPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
 model Organization {
-  id        String             @id @default(uuid()) @db.Uuid
-  name      String             @db.VarChar(160)
-  timezone  String             @default("America/Sao_Paulo") @db.VarChar(64)
-  status    OrganizationStatus @default(ACTIVE)
-  users     User[]
-  auditLogs AuditLog[]
-  customers Customer[]
-  locations ServiceLocation[]
-  equipment Equipment[]
-  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                     String                   @id @default(uuid()) @db.Uuid
+  name                   String                   @db.VarChar(160)
+  timezone               String                   @default("America/Sao_Paulo") @db.VarChar(64)
+  status                 OrganizationStatus       @default(ACTIVE)
+  users                  User[]
+  auditLogs              AuditLog[]
+  customers              Customer[]
+  locations              ServiceLocation[]
+  equipment              Equipment[]
+  workOrders             WorkOrder[]
+  workOrderStatusHistory WorkOrderStatusHistory[]
+  workOrderCounter       WorkOrderCounter?
+  createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([status])
   @@map("organizations")
@@ -59,6 +80,7 @@ model Customer {
   archivedAt         DateTime?         @map("archived_at") @db.Timestamptz(6)
   locations          ServiceLocation[]
   equipment          Equipment[]
+  workOrders         WorkOrder[]
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -90,6 +112,7 @@ model ServiceLocation {
   accessInstructions String?               @map("access_instructions") @db.VarChar(1000)
   status             ServiceLocationStatus @default(ACTIVE)
   equipment          Equipment[]
+  workOrders         WorkOrder[]
   createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -118,10 +141,12 @@ model Equipment {
   normalizedSerialNumber String?         @map("normalized_serial_number") @db.VarChar(120)
   notes                  String?         @db.VarChar(2000)
   archivedAt             DateTime?       @map("archived_at") @db.Timestamptz(6)
+  workOrders             WorkOrder[]
   createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([organizationId, id])
+  @@unique([organizationId, customerId, locationId, id])
   @@unique([organizationId, normalizedSerialNumber])
   @@index([organizationId, normalizedName, id])
   @@index([organizationId, normalizedIdentifier, id])
@@ -131,25 +156,97 @@ model Equipment {
 }
 
 model User {
-  id                  String               @id @default(uuid()) @db.Uuid
-  organizationId      String               @map("organization_id") @db.Uuid
-  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  name                String               @db.VarChar(160)
-  email               String               @db.VarChar(320)
-  normalizedEmail     String               @unique @map("normalized_email") @db.VarChar(320)
-  passwordHash        String               @map("password_hash") @db.VarChar(255)
-  role                UserRole             @default(TECHNICIAN)
-  status              UserStatus           @default(ACTIVE)
-  lastLoginAt         DateTime?            @map("last_login_at") @db.Timestamptz(6)
-  sessions            Session[]
-  passwordResetTokens PasswordResetToken[]
-  auditLogs           AuditLog[]           @relation("AuditActor")
-  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                     String                   @id @default(uuid()) @db.Uuid
+  organizationId         String                   @map("organization_id") @db.Uuid
+  organization           Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  name                   String                   @db.VarChar(160)
+  email                  String                   @db.VarChar(320)
+  normalizedEmail        String                   @unique @map("normalized_email") @db.VarChar(320)
+  passwordHash           String                   @map("password_hash") @db.VarChar(255)
+  role                   UserRole                 @default(TECHNICIAN)
+  status                 UserStatus               @default(ACTIVE)
+  lastLoginAt            DateTime?                @map("last_login_at") @db.Timestamptz(6)
+  sessions               Session[]
+  passwordResetTokens    PasswordResetToken[]
+  auditLogs              AuditLog[]               @relation("AuditActor")
+  createdWorkOrders      WorkOrder[]              @relation("WorkOrderCreator")
+  canceledWorkOrders     WorkOrder[]              @relation("WorkOrderCanceler")
+  workOrderStatusChanges WorkOrderStatusHistory[] @relation("WorkOrderStatusActor")
+  createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([organizationId, id])
   @@index([organizationId, status, role])
   @@map("users")
+}
+
+model WorkOrderCounter {
+  organizationId String       @id @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  lastNumber     BigInt       @default(0) @map("last_number")
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("work_order_counters")
+}
+
+model WorkOrder {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  organizationId        String                   @map("organization_id") @db.Uuid
+  organization          Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  number                BigInt                   @map("work_order_number")
+  customerId            String                   @map("customer_id") @db.Uuid
+  customer              Customer                 @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  locationId            String                   @map("location_id") @db.Uuid
+  location              ServiceLocation          @relation(fields: [organizationId, customerId, locationId], references: [organizationId, customerId, id], onDelete: Restrict, onUpdate: Cascade)
+  equipmentId           String?                  @map("equipment_id") @db.Uuid
+  equipment             Equipment?               @relation(fields: [organizationId, customerId, locationId, equipmentId], references: [organizationId, customerId, locationId, id], onDelete: Restrict, onUpdate: Cascade)
+  serviceType           String                   @map("service_type") @db.VarChar(120)
+  title                 String                   @db.VarChar(160)
+  normalizedTitle       String                   @map("normalized_title") @db.VarChar(160)
+  description           String                   @db.VarChar(4000)
+  priority              WorkOrderPriority        @default(NORMAL)
+  status                WorkOrderStatus          @default(DRAFT)
+  scheduledStartAt      DateTime?                @map("scheduled_start_at") @db.Timestamptz(6)
+  scheduledEndAt        DateTime?                @map("scheduled_end_at") @db.Timestamptz(6)
+  actualStartAt         DateTime?                @map("actual_start_at") @db.Timestamptz(6)
+  actualEndAt           DateTime?                @map("actual_end_at") @db.Timestamptz(6)
+  expectedAmountInCents BigInt?                  @map("expected_amount_in_cents")
+  finalAmountInCents    BigInt?                  @map("final_amount_in_cents")
+  version               Int                      @default(1)
+  createdByUserId       String                   @map("created_by_user_id") @db.Uuid
+  createdBy             User                     @relation("WorkOrderCreator", fields: [organizationId, createdByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  canceledByUserId      String?                  @map("canceled_by_user_id") @db.Uuid
+  canceledBy            User?                    @relation("WorkOrderCanceler", fields: [organizationId, canceledByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  canceledAt            DateTime?                @map("canceled_at") @db.Timestamptz(6)
+  cancellationReason    String?                  @map("cancellation_reason") @db.VarChar(1000)
+  statusHistory         WorkOrderStatusHistory[]
+  createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@index([organizationId, status, createdAt(sort: Desc), id])
+  @@index([organizationId, customerId, createdAt(sort: Desc), id])
+  @@index([organizationId, scheduledStartAt, id])
+  @@index([organizationId, normalizedTitle, id])
+  @@map("work_orders")
+}
+
+model WorkOrderStatusHistory {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrderId    String           @map("work_order_id") @db.Uuid
+  workOrder      WorkOrder        @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  previousStatus WorkOrderStatus? @map("previous_status")
+  newStatus      WorkOrderStatus  @map("new_status")
+  actorUserId    String           @map("actor_user_id") @db.Uuid
+  actor          User             @relation("WorkOrderStatusActor", fields: [organizationId, actorUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  reason         String?          @db.VarChar(1000)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([organizationId, workOrderId, createdAt, id])
+  @@map("work_order_status_history")
 }
 
 model AuditLog {

@@ -1081,6 +1081,13 @@ Cancelamento após início exige uma decisão explícita de produto e não deve 
 - Marcação como faturada registra ator e timestamp, mas não emite documento fiscal.
 - Uma ordem `BILLED` não volta de status por endpoint comum.
 
+A fundação persistida usa `BIGINT` para o contador e para valores em centavos,
+`UNIQUE (organization_id, work_order_number)` para a numeração e `version` para
+concorrência otimista. O número é apresentado como `OS-000001`, sem converter o
+contador para `number` do JavaScript. Criação, incremento do contador e histórico
+inicial compartilham uma transação; mudanças de estado passam exclusivamente pela
+state machine e persistem status, versão, histórico e auditoria atomicamente.
+
 ## Endpoints por domínio
 
 Esta seção apresenta os recursos esperados, não substitui a especificação OpenAPI implementada.
