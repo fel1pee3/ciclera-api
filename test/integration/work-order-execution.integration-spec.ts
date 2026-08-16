@@ -11,6 +11,8 @@ import {
   WorkOrderNotFoundError,
   WorkOrderVersionConflictError,
   ChecklistResponseInvalidError,
+  WorkOrderExecutionIncompleteError,
+  WorkOrderStatusLockedError,
 } from '../../src/work-orders/domain/work-order.errors';
 
 describe('Work order execution draft', () => {
@@ -62,6 +64,8 @@ describe('Work order execution draft', () => {
 
   afterAll(async () => {
     if (organizationId) {
+      await prisma.evidence.deleteMany({ where: { organizationId } });
+      await prisma.additionalItem.deleteMany({ where: { organizationId } });
       await prisma.checklistResponse.deleteMany({ where: { organizationId } });
       await prisma.workOrderExecution.deleteMany({ where: { organizationId } });
       await prisma.checklistTemplate.deleteMany({ where: { organizationId } });
@@ -277,6 +281,124 @@ describe('Work order execution draft', () => {
         [{ fieldId: 'diagnosis', value: 'Sobrescrita' }],
       ),
     ).rejects.toBeInstanceOf(WorkOrderVersionConflictError);
+  });
+
+  it('submits only complete execution once and locks further edits', async () => {
+    await checklistService.createVersion(owner, 'completion-template', {
+      name: 'Checklist de conclusão',
+      requirePhoto: true,
+      requireSignature: true,
+      fields: [
+        {
+          id: 'completion',
+          label: 'Serviço concluído',
+          type: 'BOOLEAN',
+          required: true,
+        },
+      ],
+    });
+    const scheduled = await createScheduled('completion');
+    const started = await fieldService.start(
+      technician,
+      'completion-start',
+      scheduled.id,
+      scheduled.version,
+    );
+    const initialExecutionVersion = started.execution?.version ?? 0;
+
+    try {
+      await fieldService.submitForReview(
+        technician,
+        'completion-incomplete',
+        scheduled.id,
+        initialExecutionVersion,
+      );
+      throw new Error('Expected incomplete execution.');
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(WorkOrderExecutionIncompleteError);
+      if (!(error instanceof WorkOrderExecutionIncompleteError)) throw error;
+      expect(error.issues).toEqual([
+        'CHECKLIST_INCOMPLETE',
+        'PHOTO_REQUIRED',
+        'SIGNATURE_REQUIRED',
+      ]);
+    }
+    await expect(
+      prisma.workOrder.findUniqueOrThrow({ where: { id: scheduled.id } }),
+    ).resolves.toMatchObject({ status: 'IN_PROGRESS' });
+
+    const answered = await fieldService.updateChecklist(
+      technician,
+      'completion-checklist',
+      scheduled.id,
+      initialExecutionVersion,
+      [{ fieldId: 'completion', value: true }],
+    );
+    const executionId = answered.execution?.id;
+    if (!executionId) throw new Error('Expected execution.');
+    await prisma.evidence.createMany({
+      data: [
+        {
+          organizationId,
+          workOrderId: scheduled.id,
+          executionId,
+          createdByUserId: technician.userId,
+          kind: 'PHOTO',
+          status: 'AVAILABLE',
+          objectKey: `${organizationId}/${scheduled.id}/${randomUUID()}`,
+          fileName: 'photo.jpg',
+          contentType: 'image/jpeg',
+          sizeBytes: 10,
+          confirmedAt: new Date(),
+        },
+        {
+          organizationId,
+          workOrderId: scheduled.id,
+          executionId,
+          createdByUserId: technician.userId,
+          kind: 'SIGNATURE',
+          status: 'AVAILABLE',
+          objectKey: `${organizationId}/${scheduled.id}/${randomUUID()}`,
+          fileName: 'signature.png',
+          contentType: 'image/png',
+          sizeBytes: 10,
+          confirmedAt: new Date(),
+        },
+      ],
+    });
+
+    const submitted = await fieldService.submitForReview(
+      technician,
+      'completion-submit',
+      scheduled.id,
+      answered.execution?.version ?? 0,
+    );
+    expect(submitted.status).toBe('AWAITING_REVIEW');
+    expect(submitted.actualEndAt).toBeInstanceOf(Date);
+    await fieldService.submitForReview(
+      technician,
+      'completion-repeat',
+      scheduled.id,
+      answered.execution?.version ?? 0,
+    );
+    await expect(
+      prisma.workOrderStatusHistory.count({
+        where: {
+          organizationId,
+          workOrderId: scheduled.id,
+          newStatus: 'AWAITING_REVIEW',
+        },
+      }),
+    ).resolves.toBe(1);
+    await expect(
+      fieldService.updateExecution(
+        technician,
+        'completion-locked',
+        scheduled.id,
+        (submitted.execution?.version ?? 0) + 1,
+        'Should not persist',
+      ),
+    ).rejects.toBeInstanceOf(WorkOrderStatusLockedError);
   });
 
   async function createScheduled(label: string) {

@@ -175,7 +175,14 @@ export class PrismaTechnicianWorkOrderRepository implements TechnicianWorkOrderR
               templateKey: 'default',
             },
             orderBy: { version: 'desc' },
-            select: { id: true, name: true, version: true, fields: true },
+            select: {
+              id: true,
+              name: true,
+              version: true,
+              fields: true,
+              requirePhoto: true,
+              requireSignature: true,
+            },
           },
         );
         const checklistSnapshot = checklistTemplate
@@ -184,6 +191,8 @@ export class PrismaTechnicianWorkOrderRepository implements TechnicianWorkOrderR
               name: checklistTemplate.name,
               version: checklistTemplate.version,
               fields: checklistTemplate.fields,
+              requirePhoto: checklistTemplate.requirePhoto,
+              requireSignature: checklistTemplate.requireSignature,
             }
           : undefined;
         const updated = await transaction.workOrder.updateMany({
@@ -357,6 +366,130 @@ export class PrismaTechnicianWorkOrderRepository implements TechnicianWorkOrderR
       return { status: 'SUCCESS' } as const;
     }, executionTransactionOptions);
   }
+
+  submitForReview(
+    input: Parameters<TechnicianWorkOrderRepository['submitForReview']>[0],
+  ) {
+    return this.prisma.$transaction(async (transaction) => {
+      const current = await transaction.workOrder.findFirst({
+        where: {
+          id: input.workOrderId,
+          organizationId: input.organizationId,
+          assignments: {
+            some: { technicianId: input.technicianId, unassignedAt: null },
+          },
+        },
+        select: {
+          status: true,
+          version: true,
+          execution: {
+            select: {
+              id: true,
+              version: true,
+              checklistSnapshot: true,
+              checklistResponses: {
+                select: { fieldId: true, value: true },
+              },
+              evidence: {
+                where: { status: 'AVAILABLE' },
+                select: { kind: true },
+              },
+            },
+          },
+        },
+      });
+      if (!current) return { status: 'NOT_FOUND' } as const;
+      if (current.status === 'AWAITING_REVIEW') {
+        return { status: 'ALREADY_SUBMITTED' } as const;
+      }
+      if (current.status !== 'IN_PROGRESS') {
+        return { status: 'STATUS_LOCKED' } as const;
+      }
+      if (!current.execution) return { status: 'EXECUTION_NOT_FOUND' } as const;
+      if (current.execution.version !== input.expectedVersion) {
+        return { status: 'VERSION_CONFLICT' } as const;
+      }
+      const issues = completionIssues(current.execution);
+      if (issues.length) return { status: 'INCOMPLETE', issues } as const;
+
+      const lockedExecution = await transaction.workOrderExecution.updateMany({
+        where: {
+          id: current.execution.id,
+          organizationId: input.organizationId,
+          technicianId: input.technicianId,
+          version: input.expectedVersion,
+        },
+        data: { version: { increment: 1 } },
+      });
+      if (lockedExecution.count !== 1) {
+        return { status: 'VERSION_CONFLICT' } as const;
+      }
+      const transitioned = await transaction.workOrder.updateMany({
+        where: {
+          id: input.workOrderId,
+          organizationId: input.organizationId,
+          status: 'IN_PROGRESS',
+          version: current.version,
+        },
+        data: {
+          status: 'AWAITING_REVIEW',
+          actualEndAt: new Date(),
+          version: { increment: 1 },
+        },
+      });
+      if (transitioned.count !== 1) {
+        return { status: 'VERSION_CONFLICT' } as const;
+      }
+      await transaction.workOrderStatusHistory.create({
+        data: {
+          organizationId: input.organizationId,
+          workOrderId: input.workOrderId,
+          previousStatus: 'IN_PROGRESS',
+          newStatus: 'AWAITING_REVIEW',
+          actorUserId: input.technicianId,
+          reason: 'SUBMITTED_FOR_REVIEW',
+        },
+      });
+      await writeExecutionAudit(
+        transaction,
+        input,
+        'WORK_ORDER_SUBMITTED_FOR_REVIEW',
+      );
+      return { status: 'SUCCESS' } as const;
+    }, executionTransactionOptions);
+  }
+}
+
+function completionIssues(execution: {
+  checklistSnapshot: Prisma.JsonValue | null;
+  checklistResponses: Array<{ fieldId: string; value: Prisma.JsonValue }>;
+  evidence: Array<{ kind: 'PHOTO' | 'SIGNATURE' }>;
+}) {
+  const snapshot =
+    execution.checklistSnapshot as unknown as ChecklistSnapshot | null;
+  const responses = execution.checklistResponses.map((response) => ({
+    fieldId: response.fieldId,
+    value: response.value as ChecklistAnswer['value'],
+  }));
+  const issues: Array<
+    'CHECKLIST_INCOMPLETE' | 'PHOTO_REQUIRED' | 'SIGNATURE_REQUIRED'
+  > = [];
+  if (snapshot && missingRequiredFieldIds(snapshot, responses).length) {
+    issues.push('CHECKLIST_INCOMPLETE');
+  }
+  if (
+    snapshot?.requirePhoto &&
+    !execution.evidence.some((item) => item.kind === 'PHOTO')
+  ) {
+    issues.push('PHOTO_REQUIRED');
+  }
+  if (
+    snapshot?.requireSignature &&
+    !execution.evidence.some((item) => item.kind === 'SIGNATURE')
+  ) {
+    issues.push('SIGNATURE_REQUIRED');
+  }
+  return issues;
 }
 
 const executionTransactionOptions = {

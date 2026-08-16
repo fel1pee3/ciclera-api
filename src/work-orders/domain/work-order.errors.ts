@@ -9,3 +9,8 @@ export class WorkOrderAssignmentInvalidError extends Error {}
 export class WorkOrderExecutionAlreadyStartedError extends Error {}
 export class WorkOrderExecutionNotFoundError extends Error {}
 export class ChecklistResponseInvalidError extends Error {}
+export class WorkOrderExecutionIncompleteError extends Error {
+  constructor(readonly issues: string[]) {
+    super('Work order execution is incomplete.');
+  }
+}

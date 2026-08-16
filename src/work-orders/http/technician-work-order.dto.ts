@@ -126,6 +126,13 @@ export class StartWorkOrderExecutionDto {
   version!: number;
 }
 
+export class SubmitForReviewDto {
+  @ApiProperty({ minimum: 1 })
+  @IsInt()
+  @Min(1)
+  version!: number;
+}
+
 export class UpdateWorkOrderExecutionDto {
   @ApiProperty({ minimum: 1 })
   @IsInt()

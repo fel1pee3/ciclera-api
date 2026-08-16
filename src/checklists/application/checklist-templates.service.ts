@@ -23,7 +23,12 @@ export class ChecklistTemplatesService {
   createVersion(
     principal: AuthenticatedPrincipal,
     requestId: string,
-    input: { name: string; fields: ChecklistFieldDefinition[] },
+    input: {
+      name: string;
+      fields: ChecklistFieldDefinition[];
+      requirePhoto?: boolean;
+      requireSignature?: boolean;
+    },
   ) {
     const name = optionalText(input.name);
     if (!name) throw new ChecklistDefinitionInvalidError();
@@ -37,6 +42,8 @@ export class ChecklistTemplatesService {
       actorUserId: principal.userId,
       requestId,
       name,
+      requirePhoto: input.requirePhoto ?? false,
+      requireSignature: input.requireSignature ?? false,
       fields: input.fields.map((field) => ({
         ...field,
         label: field.label.trim(),

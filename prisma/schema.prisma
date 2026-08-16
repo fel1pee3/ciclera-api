@@ -373,6 +373,8 @@ model ChecklistTemplate {
   name            String               @db.VarChar(160)
   version         Int
   fields          Json
+  requirePhoto    Boolean              @default(false) @map("require_photo")
+  requireSignature Boolean             @default(false) @map("require_signature")
   createdByUserId String               @map("created_by_user_id") @db.Uuid
   createdBy       User                 @relation("ChecklistTemplateCreator", fields: [organizationId, createdByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
   executions      WorkOrderExecution[]

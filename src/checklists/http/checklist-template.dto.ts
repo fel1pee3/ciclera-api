@@ -59,6 +59,16 @@ export class CreateChecklistTemplateVersionDto {
   @ValidateNested({ each: true })
   @Type(() => ChecklistFieldDefinitionDto)
   fields!: ChecklistFieldDefinitionDto[];
+
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  requirePhoto?: boolean;
+
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  requireSignature?: boolean;
 }
 
 export class ChecklistTemplateResponseDto {
@@ -67,5 +77,7 @@ export class ChecklistTemplateResponseDto {
   @ApiProperty() version!: number;
   @ApiProperty({ type: [ChecklistFieldDefinitionDto] })
   fields!: ChecklistFieldDefinitionDto[];
+  @ApiProperty() requirePhoto!: boolean;
+  @ApiProperty() requireSignature!: boolean;
   @ApiProperty({ format: 'date-time' }) createdAt!: Date;
 }

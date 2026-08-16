@@ -155,6 +155,12 @@ class TestTechnicianRepository implements TechnicianWorkOrderRepository {
   > {
     return Promise.resolve({ status: 'SUCCESS' });
   }
+  submitForReview(): ReturnType<
+    TechnicianWorkOrderRepository['submitForReview']
+  > {
+    this.record = { ...this.record, status: 'AWAITING_REVIEW' };
+    return Promise.resolve({ status: 'SUCCESS' });
+  }
 }
 
 const now = new Date('2026-08-16T12:00:00.000Z');

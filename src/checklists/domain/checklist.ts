@@ -22,6 +22,8 @@ export interface ChecklistSnapshot {
   name: string;
   version: number;
   fields: ChecklistFieldDefinition[];
+  requirePhoto: boolean;
+  requireSignature: boolean;
 }
 
 export interface ChecklistAnswer {

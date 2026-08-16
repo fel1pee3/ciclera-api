@@ -8,6 +8,7 @@ import {
   WorkOrderStatusLockedError,
   WorkOrderVersionConflictError,
   ChecklistResponseInvalidError,
+  WorkOrderExecutionIncompleteError,
 } from '../domain/work-order.errors';
 import {
   TECHNICIAN_WORK_ORDER_REPOSITORY,
@@ -102,11 +103,36 @@ export class TechnicianWorkOrdersService {
     );
     return this.find(principal, workOrderId);
   }
+
+  async submitForReview(
+    principal: AuthenticatedPrincipal,
+    requestId: string,
+    workOrderId: string,
+    expectedVersion: number,
+  ) {
+    const result = await this.workOrders.submitForReview({
+      organizationId: principal.organizationId,
+      technicianId: principal.userId,
+      workOrderId,
+      expectedVersion,
+      requestId,
+    });
+    if (result.status === 'INCOMPLETE') {
+      throw new WorkOrderExecutionIncompleteError(result.issues);
+    }
+    resolveExecutionMutation(result);
+    return this.find(principal, workOrderId);
+  }
 }
 
 function resolveExecutionMutation(
-  result: Awaited<ReturnType<TechnicianWorkOrderRepository['startExecution']>>,
+  result:
+    | Awaited<ReturnType<TechnicianWorkOrderRepository['startExecution']>>
+    | Awaited<ReturnType<TechnicianWorkOrderRepository['submitForReview']>>,
 ): void {
+  if (result.status === 'SUCCESS' || result.status === 'ALREADY_SUBMITTED') {
+    return;
+  }
   if (result.status === 'NOT_FOUND') throw new WorkOrderNotFoundError();
   if (result.status === 'STATUS_LOCKED') throw new WorkOrderStatusLockedError();
   if (result.status === 'VERSION_CONFLICT') {

@@ -33,6 +33,7 @@ import {
   StartWorkOrderExecutionDto,
   UpdateWorkOrderExecutionDto,
   UpdateWorkOrderChecklistDto,
+  SubmitForReviewDto,
 } from './technician-work-order.dto';
 
 @ApiTags('field-work-orders')
@@ -120,6 +121,26 @@ export class TechnicianWorkOrdersController {
         workOrderId,
         input.version,
         input.responses,
+      ),
+    );
+  }
+
+  @Post(':workOrderId/submit-for-review')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ type: TechnicianWorkOrderResponseDto })
+  async submitForReview(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Req() request: RequestWithId,
+    @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
+    @Body() input: SubmitForReviewDto,
+  ): Promise<TechnicianWorkOrderResponseDto> {
+    return toResponse(
+      await this.workOrders.submitForReview(
+        principal,
+        getRequestId(request),
+        workOrderId,
+        input.version,
       ),
     );
   }

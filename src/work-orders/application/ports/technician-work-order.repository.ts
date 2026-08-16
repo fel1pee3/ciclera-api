@@ -90,6 +90,17 @@ export type TechnicianExecutionMutationResult =
   | { status: 'EXECUTION_NOT_FOUND' }
   | { status: 'INVALID_CHECKLIST_RESPONSE' };
 
+export type ExecutionCompletionIssue =
+  'CHECKLIST_INCOMPLETE' | 'PHOTO_REQUIRED' | 'SIGNATURE_REQUIRED';
+
+export type SubmitForReviewResult =
+  | { status: 'SUCCESS' | 'ALREADY_SUBMITTED' }
+  | { status: 'NOT_FOUND' }
+  | { status: 'STATUS_LOCKED' }
+  | { status: 'VERSION_CONFLICT' }
+  | { status: 'EXECUTION_NOT_FOUND' }
+  | { status: 'INCOMPLETE'; issues: ExecutionCompletionIssue[] };
+
 export interface TechnicianWorkOrderRepository {
   list(input: {
     organizationId: string;
@@ -132,4 +143,11 @@ export interface TechnicianWorkOrderRepository {
     responses: ChecklistAnswer[];
     requestId: string;
   }): Promise<TechnicianExecutionMutationResult>;
+  submitForReview(input: {
+    organizationId: string;
+    technicianId: string;
+    workOrderId: string;
+    expectedVersion: number;
+    requestId: string;
+  }): Promise<SubmitForReviewResult>;
 }

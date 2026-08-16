@@ -9,6 +9,8 @@ export interface ChecklistTemplateRecord {
   name: string;
   version: number;
   fields: ChecklistFieldDefinition[];
+  requirePhoto: boolean;
+  requireSignature: boolean;
   createdAt: Date;
 }
 
@@ -19,6 +21,8 @@ export interface ChecklistTemplateRepository {
     requestId: string;
     name: string;
     fields: ChecklistFieldDefinition[];
+    requirePhoto: boolean;
+    requireSignature: boolean;
   }): Promise<ChecklistTemplateRecord>;
   findCurrent(organizationId: string): Promise<ChecklistTemplateRecord | null>;
 }

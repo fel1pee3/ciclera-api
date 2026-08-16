@@ -2,6 +2,8 @@
 
 API da Ciclera responsável por autenticação, autorização, isolamento multi-tenant, regras de negócio, persistência, evidências, auditoria e contratos consumidos pelo `ciclera-web`.
 
+Execuções em campo podem ser enviadas para revisão somente após a validação server-side do snapshot do checklist e das evidências obrigatórias confirmadas. O envio é transacional, versionado e bloqueia novas edições enquanto a ordem aguarda revisão.
+
 > **Do chamado ao caixa.**
 
 Antes de implementar ou alterar esta aplicação, leia também:

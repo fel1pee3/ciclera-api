@@ -31,6 +31,8 @@ export class PrismaChecklistTemplateRepository implements ChecklistTemplateRepos
             name: input.name,
             version: (latest?.version ?? 0) + 1,
             fields: input.fields as unknown as Prisma.InputJsonValue,
+            requirePhoto: input.requirePhoto,
+            requireSignature: input.requireSignature,
           },
         });
         await transaction.auditLog.create({
@@ -64,6 +66,8 @@ function mapTemplate(template: {
   name: string;
   version: number;
   fields: Prisma.JsonValue;
+  requirePhoto: boolean;
+  requireSignature: boolean;
   createdAt: Date;
 }): ChecklistTemplateRecord {
   return {
