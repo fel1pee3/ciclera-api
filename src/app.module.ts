@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
+import { AdditionalItemsModule } from './additional-items/additional-items.module';
 import { authIdentifierTracker } from './auth/http/auth-rate-limit';
 import { validateEnvironment } from './config/environment';
 import { CustomersModule } from './customers/customers.module';
@@ -31,6 +32,7 @@ import { WorkOrdersModule } from './work-orders/work-orders.module';
       },
     ]),
     PrismaModule,
+    AdditionalItemsModule,
     AuthModule,
     UsersModule,
     CustomersModule,

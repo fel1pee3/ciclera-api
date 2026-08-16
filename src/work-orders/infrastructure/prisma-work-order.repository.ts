@@ -105,14 +105,33 @@ export class PrismaWorkOrderRepository implements WorkOrderRepository {
           select: assignmentSelect,
           orderBy: [{ assignedAt: 'asc' }, { id: 'asc' }],
         },
+        additionalItems: {
+          select: {
+            id: true,
+            type: true,
+            description: true,
+            quantityInThousand: true,
+            unitAmountInCents: true,
+            totalAmountInCents: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
     if (!workOrder) return null;
-    const { statusHistory, assignments, ...record } = workOrder;
+    const { statusHistory, assignments, additionalItems, ...record } =
+      workOrder;
     return {
       ...asDomain(record),
       history: statusHistory,
       assignments: assignments.map(asAssignment),
+      additionalItems,
+      additionalTotalInCents: additionalItems.reduce(
+        (total, item) => total + item.totalAmountInCents,
+        0n,
+      ),
     };
   }
 

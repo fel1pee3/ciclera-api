@@ -177,6 +177,8 @@ class TestWorkOrderRepository implements WorkOrderRepository {
       ...this.record,
       history: history(this.record),
       assignments: this.record.status === 'SCHEDULED' ? [assignment] : [],
+      additionalItems: [],
+      additionalTotalInCents: 0n,
     });
   }
 

@@ -301,11 +301,26 @@ export class WorkOrderAssignmentResponseDto {
   unassignedAt!: Date | null;
 }
 
+export class WorkOrderAdditionalItemResponseDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ enum: ['MATERIAL', 'SERVICE', 'ADDITIONAL_HOUR'] })
+  type!: 'MATERIAL' | 'SERVICE' | 'ADDITIONAL_HOUR';
+  @ApiProperty() description!: string;
+  @ApiProperty({ example: '1.5' }) quantity!: string;
+  @ApiProperty({ example: '12500' }) unitAmountInCents!: string;
+  @ApiProperty({ example: '18750' }) totalAmountInCents!: string;
+  @ApiProperty({ format: 'date-time' }) createdAt!: Date;
+  @ApiProperty({ format: 'date-time' }) updatedAt!: Date;
+}
+
 export class WorkOrderDetailsResponseDto extends WorkOrderResponseDto {
   @ApiProperty({ type: [WorkOrderHistoryResponseDto] })
   history!: WorkOrderHistoryResponseDto[];
   @ApiProperty({ type: [WorkOrderAssignmentResponseDto] })
   assignments!: WorkOrderAssignmentResponseDto[];
+  @ApiProperty({ type: [WorkOrderAdditionalItemResponseDto] })
+  additionalItems!: WorkOrderAdditionalItemResponseDto[];
+  @ApiProperty({ example: '18750' }) additionalTotalInCents!: string;
 }
 
 export class AgendaWorkOrderResponseDto extends WorkOrderResponseDto {

@@ -25,6 +25,7 @@ import { Roles } from '../../auth/http/roles.decorator';
 import { getRequestId, type RequestWithId } from '../../http/request-id';
 import { TechnicianWorkOrdersService } from '../application/technician-work-orders.service';
 import { formatWorkOrderNumber } from '../domain/work-order';
+import { formatQuantity } from '../../additional-items/domain/additional-item';
 import {
   TechnicianWorkOrderPageDto,
   TechnicianWorkOrderQueryDto,
@@ -137,6 +138,15 @@ function toResponse(
             ...item,
             sizeBytes: item.sizeBytes.toString(),
           })),
+          additionalItems: workOrder.execution.additionalItems.map((item) => ({
+            ...item,
+            quantity: formatQuantity(item.quantityInThousand),
+            quantityInThousand: undefined,
+            unitAmountInCents: item.unitAmountInCents.toString(),
+            totalAmountInCents: item.totalAmountInCents.toString(),
+          })),
+          additionalTotalInCents:
+            workOrder.execution.additionalTotalInCents.toString(),
         }
       : null,
   };

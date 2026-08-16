@@ -61,6 +61,19 @@ export interface WorkOrderAssignment {
 export interface WorkOrderDetails extends WorkOrder {
   history: WorkOrderStatusHistoryEntry[];
   assignments: WorkOrderAssignment[];
+  additionalItems: WorkOrderAdditionalItem[];
+  additionalTotalInCents: bigint;
+}
+
+export interface WorkOrderAdditionalItem {
+  id: string;
+  type: 'MATERIAL' | 'SERVICE' | 'ADDITIONAL_HOUR';
+  description: string;
+  quantityInThousand: bigint;
+  unitAmountInCents: bigint;
+  totalAmountInCents: bigint;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface ScheduledWorkOrder extends WorkOrder {

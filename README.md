@@ -981,6 +981,11 @@ Regras:
 - Valores negativos só são aceitos em operações que explicitamente os permitam.
 - Toda alteração que afete o valor final deve ser auditável.
 
+Itens adicionais usam quantidade inteira em milésimos (`quantityInThousand`),
+aceitam até três casas decimais e transportam a quantidade como string. O total
+em centavos é calculado pela API com arredondamento meio para cima: `(quantidade
+em milésimos × valor unitário em centavos + 500) / 1000`.
+
 ## Datas e timezone
 
 - Persistir instantes em UTC usando tipo PostgreSQL adequado a timezone.
@@ -1206,9 +1211,9 @@ GET   /api/v1/field/work-orders
 GET   /api/v1/field/work-orders/:workOrderId
 POST  /api/v1/work-orders/:workOrderId/start
 PATCH /api/v1/work-orders/:workOrderId/execution
-POST  /api/v1/work-orders/:workOrderId/additional-items
-PATCH /api/v1/work-orders/:workOrderId/additional-items/:itemId
-DELETE /api/v1/work-orders/:workOrderId/additional-items/:itemId
+POST  /api/v1/field/work-orders/:workOrderId/execution/additional-items
+PATCH /api/v1/field/work-orders/:workOrderId/execution/additional-items/:itemId
+DELETE /api/v1/field/work-orders/:workOrderId/execution/additional-items/:itemId
 POST  /api/v1/work-orders/:workOrderId/resume-correction
 POST  /api/v1/work-orders/:workOrderId/submit-for-review
 ```

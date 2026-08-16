@@ -194,6 +194,8 @@ const execution = {
   updatedAt: now,
   checklist: null,
   evidence: [],
+  additionalItems: [],
+  additionalTotalInCents: 0n,
 };
 const session: ResolvedSession = {
   sessionId: '30000000-0000-4000-8000-000000000001',

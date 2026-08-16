@@ -68,6 +68,17 @@ export interface WorkOrderExecution {
     confirmedAt: Date;
     createdAt: Date;
   }>;
+  additionalItems: Array<{
+    id: string;
+    type: 'MATERIAL' | 'SERVICE' | 'ADDITIONAL_HOUR';
+    description: string;
+    quantityInThousand: bigint;
+    unitAmountInCents: bigint;
+    totalAmountInCents: bigint;
+    createdAt: Date;
+    updatedAt: Date;
+  }>;
+  additionalTotalInCents: bigint;
 }
 
 export type TechnicianExecutionMutationResult =

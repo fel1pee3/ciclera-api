@@ -56,6 +56,12 @@ enum EvidenceStatus {
   AVAILABLE
 }
 
+enum AdditionalItemType {
+  MATERIAL
+  SERVICE
+  ADDITIONAL_HOUR
+}
+
 model Organization {
   id                     String                   @id @default(uuid()) @db.Uuid
   name                   String                   @db.VarChar(160)
@@ -73,6 +79,7 @@ model Organization {
   checklistTemplates     ChecklistTemplate[]
   checklistResponses     ChecklistResponse[]
   evidence               Evidence[]
+  additionalItems        AdditionalItem[]
   workOrderCounter       WorkOrderCounter?
   createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -193,6 +200,8 @@ model User {
   workOrderExecutions       WorkOrderExecution[]     @relation("WorkOrderExecutionTechnician")
   createdChecklistTemplates ChecklistTemplate[]      @relation("ChecklistTemplateCreator")
   createdEvidence           Evidence[]               @relation("EvidenceCreator")
+  createdAdditionalItems    AdditionalItem[]         @relation("AdditionalItemCreator")
+  updatedAdditionalItems    AdditionalItem[]         @relation("AdditionalItemUpdater")
   createdAt                 DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -244,6 +253,7 @@ model WorkOrder {
   assignments           WorkOrderAssignment[]
   execution             WorkOrderExecution?
   evidence              Evidence[]
+  additionalItems       AdditionalItem[]
   createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -291,6 +301,7 @@ model WorkOrderExecution {
   checklistSnapshot   Json?               @map("checklist_snapshot")
   checklistResponses  ChecklistResponse[]
   evidence            Evidence[]
+  additionalItems     AdditionalItem[]
   version             Int                 @default(1)
   startedAt           DateTime            @default(now()) @map("started_at") @db.Timestamptz(6)
   createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -326,6 +337,32 @@ model Evidence {
   @@index([organizationId, workOrderId, status, createdAt])
   @@index([organizationId, executionId, status, createdAt])
   @@map("evidence")
+}
+
+model AdditionalItem {
+  id                 String             @id @default(uuid()) @db.Uuid
+  organizationId     String             @map("organization_id") @db.Uuid
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrderId        String             @map("work_order_id") @db.Uuid
+  workOrder          WorkOrder          @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  executionId        String             @map("execution_id") @db.Uuid
+  execution          WorkOrderExecution @relation(fields: [organizationId, executionId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  type               AdditionalItemType
+  description        String             @db.VarChar(500)
+  quantityInThousand BigInt             @map("quantity_in_thousand")
+  unitAmountInCents  BigInt             @map("unit_amount_in_cents")
+  totalAmountInCents BigInt             @map("total_amount_in_cents")
+  createdByUserId    String             @map("created_by_user_id") @db.Uuid
+  createdBy          User               @relation("AdditionalItemCreator", fields: [organizationId, createdByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  updatedByUserId    String             @map("updated_by_user_id") @db.Uuid
+  updatedBy          User               @relation("AdditionalItemUpdater", fields: [organizationId, updatedByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, workOrderId, createdAt, id])
+  @@index([organizationId, executionId, createdAt, id])
+  @@map("additional_items")
 }
 
 model ChecklistTemplate {

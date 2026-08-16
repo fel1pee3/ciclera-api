@@ -54,6 +54,10 @@ import {
   EvidenceTokenInvalidError,
   EvidenceTypeInvalidError,
 } from '../evidence/domain/evidence.errors';
+import {
+  AdditionalItemInvalidError,
+  AdditionalItemNotFoundError,
+} from '../additional-items/domain/additional-item.errors';
 
 export interface ProblemDetails {
   type: string;
@@ -419,6 +423,24 @@ function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
     };
   }
 
+  if (exception instanceof AdditionalItemNotFoundError) {
+    return {
+      type: 'https://ciclera.com.br/problems/additional-item-not-found',
+      title: 'Item adicional não encontrado',
+      detail: 'O item adicional solicitado não foi encontrado.',
+      code: 'ADDITIONAL_ITEM_NOT_FOUND',
+    };
+  }
+
+  if (exception instanceof AdditionalItemInvalidError) {
+    return {
+      type: 'https://ciclera.com.br/problems/additional-item-invalid',
+      title: 'Item adicional inválido',
+      detail: 'Revise tipo, descrição, quantidade e valor unitário.',
+      code: 'ADDITIONAL_ITEM_INVALID',
+    };
+  }
+
   if (!(exception instanceof HttpException)) {
     return {};
   }
@@ -636,6 +658,14 @@ function getHttpStatus(exception: unknown): number {
   }
 
   if (exception instanceof EvidenceTypeInvalidError) {
+    return HttpStatus.UNPROCESSABLE_ENTITY;
+  }
+
+  if (exception instanceof AdditionalItemNotFoundError) {
+    return HttpStatus.NOT_FOUND;
+  }
+
+  if (exception instanceof AdditionalItemInvalidError) {
     return HttpStatus.UNPROCESSABLE_ENTITY;
   }
 
