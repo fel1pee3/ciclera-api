@@ -36,6 +36,8 @@ import {
 import {
   WorkOrderManagementForbiddenError,
   WorkOrderAssignmentInvalidError,
+  WorkOrderExecutionAlreadyStartedError,
+  WorkOrderExecutionNotFoundError,
   WorkOrderNotFoundError,
   WorkOrderRelationInvalidError,
   WorkOrderScheduleInvalidError,
@@ -332,6 +334,24 @@ function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
     };
   }
 
+  if (exception instanceof WorkOrderExecutionAlreadyStartedError) {
+    return {
+      type: 'https://ciclera.com.br/problems/work-order-execution-started',
+      title: 'Atendimento já iniciado',
+      detail: 'Esta ordem já possui uma execução iniciada.',
+      code: 'WORK_ORDER_EXECUTION_ALREADY_STARTED',
+    };
+  }
+
+  if (exception instanceof WorkOrderExecutionNotFoundError) {
+    return {
+      type: 'https://ciclera.com.br/problems/work-order-execution-not-found',
+      title: 'Execução não encontrada',
+      detail: 'Inicie o atendimento antes de salvar o progresso.',
+      code: 'WORK_ORDER_EXECUTION_NOT_FOUND',
+    };
+  }
+
   if (!(exception instanceof HttpException)) {
     return {};
   }
@@ -512,7 +532,9 @@ function getHttpStatus(exception: unknown): number {
     exception instanceof WorkOrderStatusLockedError ||
     exception instanceof WorkOrderVersionConflictError ||
     exception instanceof WorkOrderTechnicianInvalidError ||
-    exception instanceof WorkOrderAssignmentInvalidError
+    exception instanceof WorkOrderAssignmentInvalidError ||
+    exception instanceof WorkOrderExecutionAlreadyStartedError ||
+    exception instanceof WorkOrderExecutionNotFoundError
   ) {
     return HttpStatus.CONFLICT;
   }

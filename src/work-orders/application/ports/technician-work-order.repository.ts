@@ -40,7 +40,25 @@ export interface TechnicianWorkOrder {
   actualStartAt: Date | null;
   actualEndAt: Date | null;
   version: number;
+  execution: WorkOrderExecution | null;
 }
+
+export interface WorkOrderExecution {
+  id: string;
+  technicianId: string;
+  notes: string | null;
+  version: number;
+  startedAt: Date;
+  updatedAt: Date;
+}
+
+export type TechnicianExecutionMutationResult =
+  | { status: 'SUCCESS' }
+  | { status: 'NOT_FOUND' }
+  | { status: 'STATUS_LOCKED' }
+  | { status: 'VERSION_CONFLICT' }
+  | { status: 'EXECUTION_EXISTS' }
+  | { status: 'EXECUTION_NOT_FOUND' };
 
 export interface TechnicianWorkOrderRepository {
   list(input: {
@@ -61,4 +79,19 @@ export interface TechnicianWorkOrderRepository {
     technicianId: string,
     workOrderId: string,
   ): Promise<TechnicianWorkOrder | null>;
+  startExecution(input: {
+    organizationId: string;
+    technicianId: string;
+    workOrderId: string;
+    expectedVersion: number;
+    requestId: string;
+  }): Promise<TechnicianExecutionMutationResult>;
+  updateExecution(input: {
+    organizationId: string;
+    technicianId: string;
+    workOrderId: string;
+    expectedVersion: number;
+    notes: string | null;
+    requestId: string;
+  }): Promise<TechnicianExecutionMutationResult>;
 }

@@ -1,6 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import {
   technicianWorkOrderViews,
   type TechnicianWorkOrderView,
@@ -73,6 +81,37 @@ export class TechnicianWorkOrderResponseDto {
   @ApiProperty({ format: 'date-time', nullable: true })
   actualEndAt!: Date | null;
   @ApiProperty() version!: number;
+  @ApiProperty({ type: () => WorkOrderExecutionResponseDto, nullable: true })
+  execution!: WorkOrderExecutionResponseDto | null;
+}
+
+export class WorkOrderExecutionResponseDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) technicianId!: string;
+  @ApiProperty({ nullable: true }) notes!: string | null;
+  @ApiProperty() version!: number;
+  @ApiProperty({ format: 'date-time' }) startedAt!: Date;
+  @ApiProperty({ format: 'date-time' }) updatedAt!: Date;
+}
+
+export class StartWorkOrderExecutionDto {
+  @ApiProperty({ minimum: 1 })
+  @IsInt()
+  @Min(1)
+  version!: number;
+}
+
+export class UpdateWorkOrderExecutionDto {
+  @ApiProperty({ minimum: 1 })
+  @IsInt()
+  @Min(1)
+  version!: number;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 4000 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  notes?: string | null;
 }
 
 export class TechnicianWorkOrderPageDto {

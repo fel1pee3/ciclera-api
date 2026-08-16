@@ -59,6 +59,7 @@ model Organization {
   workOrders             WorkOrder[]
   workOrderStatusHistory WorkOrderStatusHistory[]
   workOrderAssignments   WorkOrderAssignment[]
+  workOrderExecutions    WorkOrderExecution[]
   workOrderCounter       WorkOrderCounter?
   createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -176,6 +177,7 @@ model User {
   assignedWorkOrders     WorkOrderAssignment[]    @relation("WorkOrderTechnician")
   createdAssignments     WorkOrderAssignment[]    @relation("WorkOrderAssignmentCreator")
   closedAssignments      WorkOrderAssignment[]    @relation("WorkOrderAssignmentCloser")
+  workOrderExecutions    WorkOrderExecution[]     @relation("WorkOrderExecutionTechnician")
   createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -225,6 +227,7 @@ model WorkOrder {
   cancellationReason    String?                  @map("cancellation_reason") @db.VarChar(1000)
   statusHistory         WorkOrderStatusHistory[]
   assignments           WorkOrderAssignment[]
+  execution             WorkOrderExecution?
   createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -256,6 +259,26 @@ model WorkOrderAssignment {
   @@index([organizationId, workOrderId, assignedAt, id])
   @@index([organizationId, technicianId, unassignedAt, assignedAt])
   @@map("work_order_assignments")
+}
+
+model WorkOrderExecution {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrderId    String       @map("work_order_id") @db.Uuid
+  workOrder      WorkOrder    @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  technicianId   String       @map("technician_id") @db.Uuid
+  technician     User         @relation("WorkOrderExecutionTechnician", fields: [organizationId, technicianId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  notes          String?      @db.VarChar(4000)
+  version        Int          @default(1)
+  startedAt      DateTime     @default(now()) @map("started_at") @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, workOrderId])
+  @@index([organizationId, technicianId, updatedAt(sort: Desc), id])
+  @@map("work_order_executions")
 }
 
 model WorkOrderStatusHistory {

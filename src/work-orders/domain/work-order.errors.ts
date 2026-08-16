@@ -6,3 +6,5 @@ export class WorkOrderManagementForbiddenError extends Error {}
 export class WorkOrderScheduleInvalidError extends Error {}
 export class WorkOrderTechnicianInvalidError extends Error {}
 export class WorkOrderAssignmentInvalidError extends Error {}
+export class WorkOrderExecutionAlreadyStartedError extends Error {}
+export class WorkOrderExecutionNotFoundError extends Error {}

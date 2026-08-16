@@ -17,6 +17,7 @@ import type {
 import { readEnvironment } from '../src/config/environment';
 import {
   TECHNICIAN_WORK_ORDER_REPOSITORY,
+  type TechnicianWorkOrder,
   type TechnicianWorkOrderRepository,
 } from '../src/work-orders/application/ports/technician-work-order.repository';
 
@@ -49,6 +50,7 @@ describe('Technician work orders HTTP contract (e2e)', () => {
   beforeEach(() => {
     identities.user = technician;
     repository.requestedTechnicianId = null;
+    repository.record = { ...workOrder, execution: null };
   });
 
   afterAll(async () => app?.close());
@@ -79,6 +81,26 @@ describe('Technician work orders HTTP contract (e2e)', () => {
       .get('/api/v1/field/work-orders')
       .expect(403);
   });
+
+  it('starts and saves execution progress through semantic endpoints', async () => {
+    const started = await request(app.getHttpServer())
+      .post(`/api/v1/field/work-orders/${workOrder.id}/start`)
+      .send({ version: 2 })
+      .expect(200);
+    expect(started.body as unknown).toMatchObject({
+      status: 'IN_PROGRESS',
+      version: 3,
+      execution: { version: 1, notes: null },
+    });
+
+    const updated = await request(app.getHttpServer())
+      .patch(`/api/v1/field/work-orders/${workOrder.id}/execution`)
+      .send({ version: 1, notes: '  Progresso salvo no servidor  ' })
+      .expect(200);
+    expect(updated.body as unknown).toMatchObject({
+      execution: { version: 2, notes: 'Progresso salvo no servidor' },
+    });
+  });
 });
 
 class TestSessionResolver implements SessionResolver {
@@ -94,10 +116,11 @@ class TestIdentityRepository implements AuthenticatedUserRepository {
 }
 class TestTechnicianRepository implements TechnicianWorkOrderRepository {
   requestedTechnicianId: string | null = null;
+  record: TechnicianWorkOrder = { ...workOrder, execution: null };
   list(input: Parameters<TechnicianWorkOrderRepository['list']>[0]) {
     this.requestedTechnicianId = input.technicianId;
     return Promise.resolve({
-      items: [workOrder],
+      items: [this.record],
       page: input.page,
       pageSize: input.pageSize,
       total: 1,
@@ -105,7 +128,27 @@ class TestTechnicianRepository implements TechnicianWorkOrderRepository {
     });
   }
   find(_organizationId: string, _technicianId: string, workOrderId: string) {
-    return Promise.resolve(workOrderId === workOrder.id ? workOrder : null);
+    return Promise.resolve(workOrderId === workOrder.id ? this.record : null);
+  }
+  startExecution(): ReturnType<
+    TechnicianWorkOrderRepository['startExecution']
+  > {
+    this.record = {
+      ...this.record,
+      status: 'IN_PROGRESS',
+      version: 3,
+      execution,
+    };
+    return Promise.resolve({ status: 'SUCCESS' });
+  }
+  updateExecution(
+    input: Parameters<TechnicianWorkOrderRepository['updateExecution']>[0],
+  ): ReturnType<TechnicianWorkOrderRepository['updateExecution']> {
+    this.record = {
+      ...this.record,
+      execution: { ...execution, notes: input.notes, version: 2 },
+    };
+    return Promise.resolve({ status: 'SUCCESS' });
   }
 }
 
@@ -135,6 +178,15 @@ const workOrder = {
   actualStartAt: null,
   actualEndAt: null,
   version: 2,
+  execution: null,
+};
+const execution = {
+  id: '70000000-0000-4000-8000-000000000010',
+  technicianId: '30000000-0000-4000-8000-000000000101',
+  notes: null,
+  version: 1,
+  startedAt: now,
+  updatedAt: now,
 };
 const session: ResolvedSession = {
   sessionId: '30000000-0000-4000-8000-000000000001',

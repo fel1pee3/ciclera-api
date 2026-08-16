@@ -5,6 +5,7 @@ import type {
   TechnicianWorkOrderRepository,
   TechnicianWorkOrderView,
 } from '../application/ports/technician-work-order.repository';
+import { transitionWorkOrderStatus } from '../domain/work-order-state-machine';
 
 const technicianWorkOrderSelect = {
   id: true,
@@ -33,6 +34,16 @@ const technicianWorkOrderSelect = {
   actualStartAt: true,
   actualEndAt: true,
   version: true,
+  execution: {
+    select: {
+      id: true,
+      technicianId: true,
+      notes: true,
+      version: true,
+      startedAt: true,
+      updatedAt: true,
+    },
+  },
 } as const;
 
 @Injectable()
@@ -84,6 +95,157 @@ export class PrismaTechnicianWorkOrderRepository implements TechnicianWorkOrderR
       select: technicianWorkOrderSelect,
     });
   }
+
+  startExecution(
+    input: Parameters<TechnicianWorkOrderRepository['startExecution']>[0],
+  ) {
+    return this.prisma
+      .$transaction(async (transaction) => {
+        const current = await transaction.workOrder.findFirst({
+          where: {
+            id: input.workOrderId,
+            organizationId: input.organizationId,
+            assignments: {
+              some: { technicianId: input.technicianId, unassignedAt: null },
+            },
+          },
+          select: {
+            status: true,
+            version: true,
+            execution: { select: { id: true } },
+          },
+        });
+        if (!current) return { status: 'NOT_FOUND' } as const;
+        if (current.execution) return { status: 'EXECUTION_EXISTS' } as const;
+        if (current.status !== 'SCHEDULED') {
+          return { status: 'STATUS_LOCKED' } as const;
+        }
+        if (current.version !== input.expectedVersion) {
+          return { status: 'VERSION_CONFLICT' } as const;
+        }
+        const nextStatus = transitionWorkOrderStatus(current.status, 'START');
+        const now = new Date();
+        const updated = await transaction.workOrder.updateMany({
+          where: {
+            id: input.workOrderId,
+            organizationId: input.organizationId,
+            status: current.status,
+            version: input.expectedVersion,
+          },
+          data: {
+            status: nextStatus,
+            actualStartAt: now,
+            version: { increment: 1 },
+          },
+        });
+        if (updated.count !== 1) {
+          return { status: 'VERSION_CONFLICT' } as const;
+        }
+        await transaction.workOrderExecution.create({
+          data: {
+            organizationId: input.organizationId,
+            workOrderId: input.workOrderId,
+            technicianId: input.technicianId,
+            startedAt: now,
+          },
+        });
+        await transaction.workOrderStatusHistory.create({
+          data: {
+            organizationId: input.organizationId,
+            workOrderId: input.workOrderId,
+            previousStatus: current.status,
+            newStatus: nextStatus,
+            actorUserId: input.technicianId,
+            reason: 'WORK_ORDER_STARTED',
+          },
+        });
+        await writeExecutionAudit(transaction, input, 'WORK_ORDER_STARTED');
+        return { status: 'SUCCESS' } as const;
+      }, executionTransactionOptions)
+      .catch((error: unknown) => {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          return { status: 'VERSION_CONFLICT' } as const;
+        }
+        throw error;
+      });
+  }
+
+  updateExecution(
+    input: Parameters<TechnicianWorkOrderRepository['updateExecution']>[0],
+  ) {
+    return this.prisma.$transaction(async (transaction) => {
+      const current = await transaction.workOrder.findFirst({
+        where: {
+          id: input.workOrderId,
+          organizationId: input.organizationId,
+          assignments: {
+            some: { technicianId: input.technicianId, unassignedAt: null },
+          },
+        },
+        select: {
+          status: true,
+          execution: {
+            select: { id: true, version: true, technicianId: true },
+          },
+        },
+      });
+      if (!current) return { status: 'NOT_FOUND' } as const;
+      if (current.status !== 'IN_PROGRESS') {
+        return { status: 'STATUS_LOCKED' } as const;
+      }
+      if (!current.execution) return { status: 'EXECUTION_NOT_FOUND' } as const;
+      if (current.execution.version !== input.expectedVersion) {
+        return { status: 'VERSION_CONFLICT' } as const;
+      }
+      const updated = await transaction.workOrderExecution.updateMany({
+        where: {
+          id: current.execution.id,
+          organizationId: input.organizationId,
+          workOrderId: input.workOrderId,
+          technicianId: input.technicianId,
+          version: input.expectedVersion,
+        },
+        data: { notes: input.notes, version: { increment: 1 } },
+      });
+      if (updated.count !== 1) return { status: 'VERSION_CONFLICT' } as const;
+      await writeExecutionAudit(
+        transaction,
+        input,
+        'WORK_ORDER_EXECUTION_UPDATED',
+      );
+      return { status: 'SUCCESS' } as const;
+    }, executionTransactionOptions);
+  }
+}
+
+const executionTransactionOptions = {
+  maxWait: 10_000,
+  timeout: 10_000,
+} as const;
+
+function writeExecutionAudit(
+  transaction: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    technicianId: string;
+    workOrderId: string;
+    requestId: string;
+  },
+  action: string,
+) {
+  return transaction.auditLog.create({
+    data: {
+      organizationId: input.organizationId,
+      actorUserId: input.technicianId,
+      requestId: input.requestId,
+      action,
+      resourceType: 'WORK_ORDER',
+      resourceId: input.workOrderId,
+    },
+  });
 }
 
 function viewWhere(
