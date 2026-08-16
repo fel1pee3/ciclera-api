@@ -8,9 +8,11 @@ import {
 import type { WorkOrderPriority, WorkOrderStatus } from '../domain/work-order';
 import {
   WorkOrderManagementForbiddenError,
+  WorkOrderAssignmentInvalidError,
   WorkOrderNotFoundError,
   WorkOrderScheduleInvalidError,
   WorkOrderStatusLockedError,
+  WorkOrderTechnicianInvalidError,
   WorkOrderVersionConflictError,
 } from '../domain/work-order.errors';
 import { InvalidWorkOrderTransitionError } from '../domain/work-order-state-machine';
@@ -153,6 +155,84 @@ export class WorkOrdersService {
     return this.requireFound(context.principal.organizationId, workOrderId);
   }
 
+  async schedule(
+    context: RequestContext,
+    workOrderId: string,
+    input: {
+      version: number;
+      technicianId: string;
+      scheduledStartAt: Date;
+      scheduledEndAt: Date;
+    },
+  ) {
+    this.requireManager(context.principal);
+    validateRequiredSchedule(input.scheduledStartAt, input.scheduledEndAt);
+    resolvePlanning(
+      await this.workOrders.schedule({
+        ...mutationContext(context),
+        workOrderId,
+        expectedVersion: input.version,
+        technicianId: input.technicianId,
+        scheduledStartAt: input.scheduledStartAt,
+        scheduledEndAt: input.scheduledEndAt,
+      }),
+    );
+    return this.requireFound(context.principal.organizationId, workOrderId);
+  }
+
+  async reschedule(
+    context: RequestContext,
+    workOrderId: string,
+    input: { version: number; scheduledStartAt: Date; scheduledEndAt: Date },
+  ) {
+    this.requireManager(context.principal);
+    validateRequiredSchedule(input.scheduledStartAt, input.scheduledEndAt);
+    resolvePlanning(
+      await this.workOrders.reschedule({
+        ...mutationContext(context),
+        workOrderId,
+        expectedVersion: input.version,
+        scheduledStartAt: input.scheduledStartAt,
+        scheduledEndAt: input.scheduledEndAt,
+      }),
+    );
+    return this.requireFound(context.principal.organizationId, workOrderId);
+  }
+
+  async reassign(
+    context: RequestContext,
+    workOrderId: string,
+    input: { version: number; technicianId: string },
+  ) {
+    this.requireManager(context.principal);
+    resolvePlanning(
+      await this.workOrders.reassign({
+        ...mutationContext(context),
+        workOrderId,
+        expectedVersion: input.version,
+        technicianId: input.technicianId,
+      }),
+    );
+    return this.requireFound(context.principal.organizationId, workOrderId);
+  }
+
+  agenda(
+    context: RequestContext,
+    query: {
+      from: string;
+      to: string;
+      technicianId?: string;
+      status?: WorkOrderStatus;
+    },
+  ) {
+    this.requireManager(context.principal);
+    validateDatePeriod(query.from, query.to);
+    return this.workOrders.agenda({
+      ...query,
+      organizationId: context.principal.organizationId,
+    });
+  }
+
   private async requireFound(organizationId: string, workOrderId: string) {
     const workOrder = await this.workOrders.find(organizationId, workOrderId);
     if (!workOrder) throw new WorkOrderNotFoundError();
@@ -231,6 +311,25 @@ function validateSchedule(start: Date | null, end: Date | null): void {
   if (start && end && end <= start) throw new WorkOrderScheduleInvalidError();
 }
 
+function validateRequiredSchedule(start: Date, end: Date): void {
+  validateSchedule(start, end);
+}
+
+function validateDatePeriod(from: string, to: string): void {
+  const start = new Date(`${from}T00:00:00.000Z`);
+  const end = new Date(`${to}T00:00:00.000Z`);
+  if (
+    !Number.isFinite(start.getTime()) ||
+    !Number.isFinite(end.getTime()) ||
+    end < start
+  ) {
+    throw new WorkOrderScheduleInvalidError();
+  }
+  const maximum = new Date(start);
+  maximum.setUTCDate(maximum.getUTCDate() + 92);
+  if (end > maximum) throw new WorkOrderScheduleInvalidError();
+}
+
 function resolveMutation(
   result:
     | Awaited<ReturnType<WorkOrderRepository['updateDraft']>>
@@ -241,4 +340,17 @@ function resolveMutation(
     throw new WorkOrderVersionConflictError();
   }
   if (result.status === 'STATUS_LOCKED') throw new WorkOrderStatusLockedError();
+}
+
+function resolvePlanning(
+  result: Awaited<ReturnType<WorkOrderRepository['schedule']>>,
+): void {
+  if (result.status === 'NOT_FOUND') throw new WorkOrderNotFoundError();
+  if (result.status === 'STATUS_LOCKED') throw new WorkOrderStatusLockedError();
+  if (result.status === 'VERSION_CONFLICT')
+    throw new WorkOrderVersionConflictError();
+  if (result.status === 'TECHNICIAN_INVALID')
+    throw new WorkOrderTechnicianInvalidError();
+  if (result.status === 'ASSIGNMENT_INVALID')
+    throw new WorkOrderAssignmentInvalidError();
 }

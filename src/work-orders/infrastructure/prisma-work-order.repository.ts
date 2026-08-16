@@ -3,10 +3,11 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma/prisma.service';
 import type {
   WorkOrderMutationContext,
+  WorkOrderPlanningResult,
   WorkOrderRepository,
   WorkOrderTransitionResult,
 } from '../application/ports/work-order.repository';
-import type { WorkOrder } from '../domain/work-order';
+import type { WorkOrder, WorkOrderAssignment } from '../domain/work-order';
 import { WorkOrderRelationInvalidError } from '../domain/work-order.errors';
 import { transitionWorkOrderStatus } from '../domain/work-order-state-machine';
 
@@ -100,11 +101,19 @@ export class PrismaWorkOrderRepository implements WorkOrderRepository {
           },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         },
+        assignments: {
+          select: assignmentSelect,
+          orderBy: [{ assignedAt: 'asc' }, { id: 'asc' }],
+        },
       },
     });
     if (!workOrder) return null;
-    const { statusHistory, ...record } = workOrder;
-    return { ...asDomain(record), history: statusHistory };
+    const { statusHistory, assignments, ...record } = workOrder;
+    return {
+      ...asDomain(record),
+      history: statusHistory,
+      assignments: assignments.map(asAssignment),
+    };
   }
 
   createDraft(input: Parameters<WorkOrderRepository['createDraft']>[0]) {
@@ -316,6 +325,233 @@ export class PrismaWorkOrderRepository implements WorkOrderRepository {
       return { status: 'SUCCESS', workOrder: asDomain(workOrder) };
     }, transactionOptions);
   }
+
+  schedule(
+    input: Parameters<WorkOrderRepository['schedule']>[0],
+  ): Promise<WorkOrderPlanningResult> {
+    return this.prisma.$transaction(async (transaction) => {
+      if (!(await validTechnician(transaction, input))) {
+        return { status: 'TECHNICIAN_INVALID' };
+      }
+      const current = await planningTarget(transaction, input);
+      if (!current) return { status: 'NOT_FOUND' };
+      if (current.status !== 'DRAFT') return { status: 'STATUS_LOCKED' };
+      if (current.version !== input.expectedVersion) {
+        return { status: 'VERSION_CONFLICT' };
+      }
+      const updated = await transaction.workOrder.updateMany({
+        where: {
+          organizationId: input.organizationId,
+          id: input.workOrderId,
+          status: 'DRAFT',
+          version: input.expectedVersion,
+        },
+        data: {
+          status: 'SCHEDULED',
+          scheduledStartAt: input.scheduledStartAt,
+          scheduledEndAt: input.scheduledEndAt,
+          version: { increment: 1 },
+        },
+      });
+      if (updated.count !== 1) return { status: 'VERSION_CONFLICT' };
+      await transaction.workOrderAssignment.create({
+        data: {
+          organizationId: input.organizationId,
+          workOrderId: input.workOrderId,
+          technicianId: input.technicianId,
+          assignedByUserId: input.actorUserId,
+        },
+      });
+      await appendPlanningHistory(
+        transaction,
+        input,
+        'DRAFT',
+        'SCHEDULED',
+        'WORK_ORDER_SCHEDULED',
+      );
+      await writeAudit(
+        transaction,
+        input,
+        input.workOrderId,
+        'WORK_ORDER_SCHEDULED',
+      );
+      return { status: 'SUCCESS' };
+    }, transactionOptions);
+  }
+
+  reschedule(
+    input: Parameters<WorkOrderRepository['reschedule']>[0],
+  ): Promise<WorkOrderPlanningResult> {
+    return this.prisma.$transaction(async (transaction) => {
+      const current = await planningTarget(transaction, input);
+      if (!current) return { status: 'NOT_FOUND' };
+      if (current.status !== 'SCHEDULED') return { status: 'STATUS_LOCKED' };
+      if (current.version !== input.expectedVersion) {
+        return { status: 'VERSION_CONFLICT' };
+      }
+      const active = await transaction.workOrderAssignment.count({
+        where: {
+          organizationId: input.organizationId,
+          workOrderId: input.workOrderId,
+          unassignedAt: null,
+        },
+      });
+      if (active !== 1) return { status: 'ASSIGNMENT_INVALID' };
+      const updated = await transaction.workOrder.updateMany({
+        where: {
+          organizationId: input.organizationId,
+          id: input.workOrderId,
+          status: 'SCHEDULED',
+          version: input.expectedVersion,
+        },
+        data: {
+          scheduledStartAt: input.scheduledStartAt,
+          scheduledEndAt: input.scheduledEndAt,
+          version: { increment: 1 },
+        },
+      });
+      if (updated.count !== 1) return { status: 'VERSION_CONFLICT' };
+      await appendPlanningHistory(
+        transaction,
+        input,
+        'SCHEDULED',
+        'SCHEDULED',
+        'WORK_ORDER_RESCHEDULED',
+      );
+      await writeAudit(
+        transaction,
+        input,
+        input.workOrderId,
+        'WORK_ORDER_RESCHEDULED',
+      );
+      return { status: 'SUCCESS' };
+    }, transactionOptions);
+  }
+
+  reassign(
+    input: Parameters<WorkOrderRepository['reassign']>[0],
+  ): Promise<WorkOrderPlanningResult> {
+    return this.prisma
+      .$transaction(async (transaction) => {
+        if (!(await validTechnician(transaction, input))) {
+          return { status: 'TECHNICIAN_INVALID' } as const;
+        }
+        const current = await planningTarget(transaction, input);
+        if (!current) return { status: 'NOT_FOUND' } as const;
+        if (current.status !== 'SCHEDULED') {
+          return { status: 'STATUS_LOCKED' } as const;
+        }
+        if (current.version !== input.expectedVersion) {
+          return { status: 'VERSION_CONFLICT' } as const;
+        }
+        const active = await transaction.workOrderAssignment.findFirst({
+          where: {
+            organizationId: input.organizationId,
+            workOrderId: input.workOrderId,
+            unassignedAt: null,
+          },
+          select: { id: true, technicianId: true },
+        });
+        if (!active || active.technicianId === input.technicianId) {
+          return { status: 'ASSIGNMENT_INVALID' } as const;
+        }
+        const updated = await transaction.workOrder.updateMany({
+          where: {
+            organizationId: input.organizationId,
+            id: input.workOrderId,
+            status: 'SCHEDULED',
+            version: input.expectedVersion,
+          },
+          data: { version: { increment: 1 } },
+        });
+        if (updated.count !== 1) return { status: 'VERSION_CONFLICT' } as const;
+        const now = new Date();
+        const closed = await transaction.workOrderAssignment.updateMany({
+          where: {
+            id: active.id,
+            organizationId: input.organizationId,
+            unassignedAt: null,
+          },
+          data: { unassignedAt: now, unassignedByUserId: input.actorUserId },
+        });
+        if (closed.count !== 1) throw new AssignmentInvariantError();
+        await transaction.workOrderAssignment.create({
+          data: {
+            organizationId: input.organizationId,
+            workOrderId: input.workOrderId,
+            technicianId: input.technicianId,
+            assignedByUserId: input.actorUserId,
+            assignedAt: now,
+          },
+        });
+        await writeAudit(
+          transaction,
+          input,
+          input.workOrderId,
+          'WORK_ORDER_REASSIGNED',
+        );
+        return { status: 'SUCCESS' } as const;
+      }, transactionOptions)
+      .catch((error: unknown) => {
+        if (error instanceof AssignmentInvariantError) {
+          return { status: 'ASSIGNMENT_INVALID' };
+        }
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          return { status: 'VERSION_CONFLICT' };
+        }
+        throw error;
+      });
+  }
+
+  async agenda(input: Parameters<WorkOrderRepository['agenda']>[0]) {
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: input.organizationId },
+      select: { timezone: true },
+    });
+    const timezone = organization?.timezone ?? 'UTC';
+    const range = localDateRangeToUtc(input.from, input.to, timezone);
+    const orders = await this.prisma.workOrder.findMany({
+      where: {
+        organizationId: input.organizationId,
+        scheduledStartAt: { gte: range.from, lt: range.toExclusive },
+        ...(input.status ? { status: input.status } : {}),
+        assignments: {
+          some: {
+            unassignedAt: null,
+            ...(input.technicianId ? { technicianId: input.technicianId } : {}),
+          },
+        },
+      },
+      select: {
+        ...workOrderSelect,
+        assignments: {
+          where: { unassignedAt: null },
+          select: assignmentSelect,
+          take: 1,
+        },
+      },
+      orderBy: [{ scheduledStartAt: 'asc' }, { id: 'asc' }],
+    });
+    return {
+      items: orders.flatMap(({ assignments, ...order }) => {
+        const activeAssignment = assignments[0];
+        return activeAssignment
+          ? [
+              {
+                ...asDomain(order),
+                activeAssignment: asAssignment(activeAssignment),
+              },
+            ]
+          : [];
+      }),
+      timezone,
+      from: input.from,
+      to: input.to,
+    };
+  }
 }
 
 const transactionOptions = { maxWait: 10_000, timeout: 10_000 } as const;
@@ -411,3 +647,126 @@ function writeAudit(
     },
   });
 }
+
+const assignmentSelect = {
+  id: true,
+  technicianId: true,
+  technician: { select: { name: true } },
+  assignedByUserId: true,
+  assignedAt: true,
+  unassignedByUserId: true,
+  unassignedAt: true,
+} as const;
+
+function asAssignment(
+  value: Prisma.WorkOrderAssignmentGetPayload<{
+    select: typeof assignmentSelect;
+  }>,
+): WorkOrderAssignment {
+  return {
+    id: value.id,
+    technicianId: value.technicianId,
+    technicianName: value.technician.name,
+    assignedByUserId: value.assignedByUserId,
+    assignedAt: value.assignedAt,
+    unassignedByUserId: value.unassignedByUserId,
+    unassignedAt: value.unassignedAt,
+  };
+}
+
+function planningTarget(
+  transaction: Prisma.TransactionClient,
+  input: { organizationId: string; workOrderId: string },
+) {
+  return transaction.workOrder.findUnique({
+    where: {
+      organizationId_id: {
+        organizationId: input.organizationId,
+        id: input.workOrderId,
+      },
+    },
+    select: { status: true, version: true },
+  });
+}
+
+async function validTechnician(
+  transaction: Prisma.TransactionClient,
+  input: { organizationId: string; technicianId: string },
+) {
+  const technician = await transaction.user.findUnique({
+    where: {
+      organizationId_id: {
+        organizationId: input.organizationId,
+        id: input.technicianId,
+      },
+    },
+    select: { role: true, status: true },
+  });
+  return technician?.role === 'TECHNICIAN' && technician.status === 'ACTIVE';
+}
+
+function appendPlanningHistory(
+  transaction: Prisma.TransactionClient,
+  context: WorkOrderMutationContext & { workOrderId: string },
+  previousStatus: 'DRAFT' | 'SCHEDULED',
+  newStatus: 'SCHEDULED',
+  reason: string,
+) {
+  return transaction.workOrderStatusHistory.create({
+    data: {
+      organizationId: context.organizationId,
+      workOrderId: context.workOrderId,
+      previousStatus,
+      newStatus,
+      actorUserId: context.actorUserId,
+      reason,
+    },
+  });
+}
+
+function localDateRangeToUtc(from: string, to: string, timezone: string) {
+  return {
+    from: zonedMidnightToUtc(from, timezone),
+    toExclusive: zonedMidnightToUtc(addDays(to, 1), timezone),
+  };
+}
+
+function addDays(date: string, days: number): string {
+  const value = new Date(`${date}T12:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function zonedMidnightToUtc(date: string, timezone: string): Date {
+  const [year, month, day] = date.split('-').map(Number);
+  let instant = Date.UTC(year, month - 1, day);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const parts = Object.fromEntries(
+      formatter
+        .formatToParts(new Date(instant))
+        .map((part) => [part.type, part.value]),
+    );
+    const rendered = Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour),
+      Number(parts.minute),
+      Number(parts.second),
+    );
+    instant += Date.UTC(year, month - 1, day) - rendered;
+  }
+  return new Date(instant);
+}
+
+class AssignmentInvariantError extends Error {}

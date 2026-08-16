@@ -58,6 +58,7 @@ model Organization {
   equipment              Equipment[]
   workOrders             WorkOrder[]
   workOrderStatusHistory WorkOrderStatusHistory[]
+  workOrderAssignments   WorkOrderAssignment[]
   workOrderCounter       WorkOrderCounter?
   createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -172,6 +173,9 @@ model User {
   createdWorkOrders      WorkOrder[]              @relation("WorkOrderCreator")
   canceledWorkOrders     WorkOrder[]              @relation("WorkOrderCanceler")
   workOrderStatusChanges WorkOrderStatusHistory[] @relation("WorkOrderStatusActor")
+  assignedWorkOrders     WorkOrderAssignment[]    @relation("WorkOrderTechnician")
+  createdAssignments     WorkOrderAssignment[]    @relation("WorkOrderAssignmentCreator")
+  closedAssignments      WorkOrderAssignment[]    @relation("WorkOrderAssignmentCloser")
   createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -220,6 +224,7 @@ model WorkOrder {
   canceledAt            DateTime?                @map("canceled_at") @db.Timestamptz(6)
   cancellationReason    String?                  @map("cancellation_reason") @db.VarChar(1000)
   statusHistory         WorkOrderStatusHistory[]
+  assignments           WorkOrderAssignment[]
   createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -230,6 +235,27 @@ model WorkOrder {
   @@index([organizationId, scheduledStartAt, id])
   @@index([organizationId, normalizedTitle, id])
   @@map("work_orders")
+}
+
+model WorkOrderAssignment {
+  id                     String       @id @default(uuid()) @db.Uuid
+  organizationId         String       @map("organization_id") @db.Uuid
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrderId            String       @map("work_order_id") @db.Uuid
+  workOrder              WorkOrder    @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  technicianId           String       @map("technician_id") @db.Uuid
+  technician             User         @relation("WorkOrderTechnician", fields: [organizationId, technicianId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  assignedByUserId       String       @map("assigned_by_user_id") @db.Uuid
+  assignedBy             User         @relation("WorkOrderAssignmentCreator", fields: [organizationId, assignedByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  assignedAt             DateTime     @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  unassignedByUserId     String?      @map("unassigned_by_user_id") @db.Uuid
+  unassignedBy           User?        @relation("WorkOrderAssignmentCloser", fields: [organizationId, unassignedByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  unassignedAt           DateTime?    @map("unassigned_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, workOrderId, assignedAt, id])
+  @@index([organizationId, technicianId, unassignedAt, assignedAt])
+  @@map("work_order_assignments")
 }
 
 model WorkOrderStatusHistory {

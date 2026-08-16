@@ -3,6 +3,7 @@ import type {
   WorkOrderDetails,
   WorkOrderPriority,
   WorkOrderStatus,
+  ScheduledWorkOrder,
 } from '../../domain/work-order';
 import type { WorkOrderAction } from '../../domain/work-order-state-machine';
 
@@ -38,6 +39,14 @@ export type WorkOrderUpdateResult =
   | { status: 'NOT_FOUND' }
   | { status: 'STATUS_LOCKED' }
   | { status: 'VERSION_CONFLICT' };
+
+export type WorkOrderPlanningResult =
+  | { status: 'SUCCESS' }
+  | { status: 'NOT_FOUND' }
+  | { status: 'STATUS_LOCKED' }
+  | { status: 'VERSION_CONFLICT' }
+  | { status: 'TECHNICIAN_INVALID' }
+  | { status: 'ASSIGNMENT_INVALID' };
 
 export interface UpdateDraftData {
   customerId?: string;
@@ -97,4 +106,40 @@ export interface WorkOrderRepository {
       reason?: string | null;
     },
   ): Promise<WorkOrderTransitionResult>;
+  schedule(
+    input: WorkOrderMutationContext & {
+      workOrderId: string;
+      expectedVersion: number;
+      technicianId: string;
+      scheduledStartAt: Date;
+      scheduledEndAt: Date;
+    },
+  ): Promise<WorkOrderPlanningResult>;
+  reschedule(
+    input: WorkOrderMutationContext & {
+      workOrderId: string;
+      expectedVersion: number;
+      scheduledStartAt: Date;
+      scheduledEndAt: Date;
+    },
+  ): Promise<WorkOrderPlanningResult>;
+  reassign(
+    input: WorkOrderMutationContext & {
+      workOrderId: string;
+      expectedVersion: number;
+      technicianId: string;
+    },
+  ): Promise<WorkOrderPlanningResult>;
+  agenda(input: {
+    organizationId: string;
+    from: string;
+    to: string;
+    technicianId?: string;
+    status?: WorkOrderStatus;
+  }): Promise<{
+    items: ScheduledWorkOrder[];
+    timezone: string;
+    from: string;
+    to: string;
+  }>;
 }

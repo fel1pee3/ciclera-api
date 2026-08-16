@@ -117,6 +117,32 @@ describe('Work orders HTTP contract (e2e)', () => {
     identities.user = { ...activeOwner, role: 'TECHNICIAN' };
     await request(app.getHttpServer()).get('/api/v1/work-orders').expect(403);
   });
+
+  it('exposes semantic scheduling and agenda contracts', async () => {
+    const scheduled = await request(app.getHttpServer())
+      .post(`/api/v1/work-orders/${workOrderId}/schedule`)
+      .send({
+        version: 1,
+        technicianId,
+        scheduledStartAt: '2026-08-17T12:00:00.000Z',
+        scheduledEndAt: '2026-08-17T14:00:00.000Z',
+      })
+      .expect(200);
+    expect(scheduled.body).toMatchObject({
+      status: 'SCHEDULED',
+      version: 2,
+      assignments: [{ technicianId, unassignedAt: null }],
+    });
+
+    const agenda = await request(app.getHttpServer())
+      .get('/api/v1/work-orders/agenda?from=2026-08-17&to=2026-08-17')
+      .expect(200);
+    expect(agenda.body).toMatchObject({
+      timezone: 'America/Sao_Paulo',
+      from: '2026-08-17',
+      to: '2026-08-17',
+    });
+  });
 });
 
 class TestSessionResolver implements SessionResolver {
@@ -147,7 +173,11 @@ class TestWorkOrderRepository implements WorkOrderRepository {
   }
 
   find(): Promise<WorkOrderDetails> {
-    return Promise.resolve({ ...this.record, history: history(this.record) });
+    return Promise.resolve({
+      ...this.record,
+      history: history(this.record),
+      assignments: this.record.status === 'SCHEDULED' ? [assignment] : [],
+    });
   }
 
   createDraft(): Promise<WorkOrder> {
@@ -171,6 +201,39 @@ class TestWorkOrderRepository implements WorkOrderRepository {
       cancellationReason: inputValue.reason ?? null,
     };
     return Promise.resolve({ status: 'SUCCESS', workOrder: this.record });
+  }
+
+  schedule(): ReturnType<WorkOrderRepository['schedule']> {
+    this.record = {
+      ...this.record,
+      status: 'SCHEDULED',
+      version: 2,
+      scheduledStartAt: new Date('2026-08-17T12:00:00.000Z'),
+      scheduledEndAt: new Date('2026-08-17T14:00:00.000Z'),
+    };
+    return Promise.resolve({ status: 'SUCCESS' });
+  }
+
+  reschedule(): ReturnType<WorkOrderRepository['reschedule']> {
+    return Promise.resolve({ status: 'SUCCESS' });
+  }
+
+  reassign(): ReturnType<WorkOrderRepository['reassign']> {
+    return Promise.resolve({ status: 'SUCCESS' });
+  }
+
+  agenda(
+    inputValue: Parameters<WorkOrderRepository['agenda']>[0],
+  ): ReturnType<WorkOrderRepository['agenda']> {
+    return Promise.resolve({
+      items:
+        this.record.status === 'SCHEDULED'
+          ? [{ ...this.record, activeAssignment: assignment }]
+          : [],
+      timezone: 'America/Sao_Paulo',
+      from: inputValue.from,
+      to: inputValue.to,
+    });
   }
 }
 
@@ -250,4 +313,14 @@ const activeOwner: AuthenticatedUser = {
   role: 'OWNER',
   status: 'ACTIVE',
   organizationStatus: 'ACTIVE',
+};
+const technicianId = '30000000-0000-4000-8000-000000000102';
+const assignment = {
+  id: '30000000-0000-4000-8000-000000000103',
+  technicianId,
+  technicianName: 'Técnico',
+  assignedByUserId: session.userId,
+  assignedAt: now,
+  unassignedByUserId: null,
+  unassignedAt: null,
 };

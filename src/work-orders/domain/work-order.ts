@@ -48,8 +48,23 @@ export interface WorkOrderStatusHistoryEntry {
   createdAt: Date;
 }
 
+export interface WorkOrderAssignment {
+  id: string;
+  technicianId: string;
+  technicianName: string;
+  assignedByUserId: string;
+  assignedAt: Date;
+  unassignedByUserId: string | null;
+  unassignedAt: Date | null;
+}
+
 export interface WorkOrderDetails extends WorkOrder {
   history: WorkOrderStatusHistoryEntry[];
+  assignments: WorkOrderAssignment[];
+}
+
+export interface ScheduledWorkOrder extends WorkOrder {
+  activeAssignment: WorkOrderAssignment;
 }
 
 export function formatWorkOrderNumber(number: bigint): string {

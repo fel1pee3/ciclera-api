@@ -28,7 +28,12 @@ import { getRequestId, type RequestWithId } from '../../http/request-id';
 import { WorkOrdersService } from '../application/work-orders.service';
 import {
   CancelDraftDto,
+  AgendaQueryDto,
+  AgendaResponseDto,
   ListWorkOrdersQueryDto,
+  ReassignWorkOrderDto,
+  RescheduleWorkOrderDto,
+  ScheduleWorkOrderDto,
   UpdateWorkOrderDto,
   WorkOrderDetailsResponseDto,
   WorkOrderInputDto,
@@ -70,6 +75,27 @@ export class WorkOrdersController {
     return toWorkOrderDetailsResponse(
       await this.workOrders.create(context(principal, request), input),
     );
+  }
+
+  @Get('agenda')
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ type: AgendaResponseDto })
+  async agenda(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Req() request: RequestWithId,
+    @Query() query: AgendaQueryDto,
+  ): Promise<AgendaResponseDto> {
+    const agenda = await this.workOrders.agenda(
+      context(principal, request),
+      query,
+    );
+    return {
+      ...agenda,
+      items: agenda.items.map((item) => ({
+        ...toWorkOrderResponse(item),
+        activeAssignment: item.activeAssignment,
+      })),
+    };
   }
 
   @Get(':workOrderId')
@@ -126,6 +152,66 @@ export class WorkOrdersController {
         workOrderId,
         input.version,
         input.reason,
+      ),
+    );
+  }
+
+  @Post(':workOrderId/schedule')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ type: WorkOrderDetailsResponseDto })
+  @ApiConflictResponse({
+    description: 'Status, versão ou técnico incompatível.',
+  })
+  async schedule(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Req() request: RequestWithId,
+    @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
+    @Body() input: ScheduleWorkOrderDto,
+  ): Promise<WorkOrderDetailsResponseDto> {
+    return toWorkOrderDetailsResponse(
+      await this.workOrders.schedule(
+        context(principal, request),
+        workOrderId,
+        input,
+      ),
+    );
+  }
+
+  @Post(':workOrderId/reschedule')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ type: WorkOrderDetailsResponseDto })
+  async reschedule(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Req() request: RequestWithId,
+    @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
+    @Body() input: RescheduleWorkOrderDto,
+  ): Promise<WorkOrderDetailsResponseDto> {
+    return toWorkOrderDetailsResponse(
+      await this.workOrders.reschedule(
+        context(principal, request),
+        workOrderId,
+        input,
+      ),
+    );
+  }
+
+  @Post(':workOrderId/reassign')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ type: WorkOrderDetailsResponseDto })
+  async reassign(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Req() request: RequestWithId,
+    @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
+    @Body() input: ReassignWorkOrderDto,
+  ): Promise<WorkOrderDetailsResponseDto> {
+    return toWorkOrderDetailsResponse(
+      await this.workOrders.reassign(
+        context(principal, request),
+        workOrderId,
+        input,
       ),
     );
   }

@@ -22,5 +22,6 @@ export function toWorkOrderDetailsResponse(
   return {
     ...toWorkOrderResponse(workOrder),
     history: workOrder.history,
+    assignments: workOrder.assignments,
   };
 }

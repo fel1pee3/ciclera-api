@@ -176,6 +176,75 @@ export class CancelDraftDto {
   reason!: string;
 }
 
+export class ScheduleWorkOrderDto {
+  @ApiProperty({ minimum: 1 })
+  @IsInt()
+  @Min(1)
+  version!: number;
+
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  technicianId!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  @Type(() => Date)
+  @IsDate()
+  scheduledStartAt!: Date;
+
+  @ApiProperty({ format: 'date-time' })
+  @Type(() => Date)
+  @IsDate()
+  scheduledEndAt!: Date;
+}
+
+export class RescheduleWorkOrderDto {
+  @ApiProperty({ minimum: 1 })
+  @IsInt()
+  @Min(1)
+  version!: number;
+
+  @ApiProperty({ format: 'date-time' })
+  @Type(() => Date)
+  @IsDate()
+  scheduledStartAt!: Date;
+
+  @ApiProperty({ format: 'date-time' })
+  @Type(() => Date)
+  @IsDate()
+  scheduledEndAt!: Date;
+}
+
+export class ReassignWorkOrderDto {
+  @ApiProperty({ minimum: 1 })
+  @IsInt()
+  @Min(1)
+  version!: number;
+
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  technicianId!: string;
+}
+
+export class AgendaQueryDto {
+  @ApiProperty({ format: 'date', example: '2026-08-16' })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  from!: string;
+
+  @ApiProperty({ format: 'date', example: '2026-08-22' })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  to!: string;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID()
+  technicianId?: string;
+
+  @ApiPropertyOptional({ enum: workOrderStatuses })
+  @IsOptional()
+  @IsIn(workOrderStatuses)
+  status?: WorkOrderStatus;
+}
+
 export class WorkOrderResponseDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ example: 'OS-000001' }) number!: string;
@@ -220,9 +289,36 @@ export class WorkOrderHistoryResponseDto {
   @ApiProperty({ format: 'date-time' }) createdAt!: Date;
 }
 
+export class WorkOrderAssignmentResponseDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) technicianId!: string;
+  @ApiProperty() technicianName!: string;
+  @ApiProperty({ format: 'uuid' }) assignedByUserId!: string;
+  @ApiProperty({ format: 'date-time' }) assignedAt!: Date;
+  @ApiProperty({ format: 'uuid', nullable: true })
+  unassignedByUserId!: string | null;
+  @ApiProperty({ format: 'date-time', nullable: true })
+  unassignedAt!: Date | null;
+}
+
 export class WorkOrderDetailsResponseDto extends WorkOrderResponseDto {
   @ApiProperty({ type: [WorkOrderHistoryResponseDto] })
   history!: WorkOrderHistoryResponseDto[];
+  @ApiProperty({ type: [WorkOrderAssignmentResponseDto] })
+  assignments!: WorkOrderAssignmentResponseDto[];
+}
+
+export class AgendaWorkOrderResponseDto extends WorkOrderResponseDto {
+  @ApiProperty({ type: WorkOrderAssignmentResponseDto })
+  activeAssignment!: WorkOrderAssignmentResponseDto;
+}
+
+export class AgendaResponseDto {
+  @ApiProperty({ type: [AgendaWorkOrderResponseDto] })
+  items!: AgendaWorkOrderResponseDto[];
+  @ApiProperty() timezone!: string;
+  @ApiProperty({ format: 'date' }) from!: string;
+  @ApiProperty({ format: 'date' }) to!: string;
 }
 
 export class WorkOrderPageResponseDto {

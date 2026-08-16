@@ -35,10 +35,12 @@ import {
 } from '../equipment/domain/equipment.errors';
 import {
   WorkOrderManagementForbiddenError,
+  WorkOrderAssignmentInvalidError,
   WorkOrderNotFoundError,
   WorkOrderRelationInvalidError,
   WorkOrderScheduleInvalidError,
   WorkOrderStatusLockedError,
+  WorkOrderTechnicianInvalidError,
   WorkOrderVersionConflictError,
 } from '../work-orders/domain/work-order.errors';
 
@@ -312,6 +314,24 @@ function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
     };
   }
 
+  if (exception instanceof WorkOrderTechnicianInvalidError) {
+    return {
+      type: 'https://ciclera.com.br/problems/work-order-technician-invalid',
+      title: 'Técnico inválido',
+      detail: 'Selecione um técnico ativo da organização.',
+      code: 'WORK_ORDER_TECHNICIAN_INVALID',
+    };
+  }
+
+  if (exception instanceof WorkOrderAssignmentInvalidError) {
+    return {
+      type: 'https://ciclera.com.br/problems/work-order-assignment-invalid',
+      title: 'Atribuição inválida',
+      detail: 'A ordem não possui uma atribuição ativa compatível.',
+      code: 'WORK_ORDER_ASSIGNMENT_INVALID',
+    };
+  }
+
   if (!(exception instanceof HttpException)) {
     return {};
   }
@@ -490,7 +510,9 @@ function getHttpStatus(exception: unknown): number {
   if (
     exception instanceof WorkOrderRelationInvalidError ||
     exception instanceof WorkOrderStatusLockedError ||
-    exception instanceof WorkOrderVersionConflictError
+    exception instanceof WorkOrderVersionConflictError ||
+    exception instanceof WorkOrderTechnicianInvalidError ||
+    exception instanceof WorkOrderAssignmentInvalidError
   ) {
     return HttpStatus.CONFLICT;
   }
