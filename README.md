@@ -1214,7 +1214,7 @@ PATCH /api/v1/field/work-orders/:workOrderId/execution
 POST  /api/v1/field/work-orders/:workOrderId/execution/additional-items
 PATCH /api/v1/field/work-orders/:workOrderId/execution/additional-items/:itemId
 DELETE /api/v1/field/work-orders/:workOrderId/execution/additional-items/:itemId
-POST  /api/v1/work-orders/:workOrderId/resume-correction
+POST  /api/v1/field/work-orders/:workOrderId/resume-correction
 POST  /api/v1/field/work-orders/:workOrderId/submit-for-review
 ```
 
@@ -1238,7 +1238,7 @@ Exclusão só é permitida enquanto a execução puder ser editada e pelo ator a
 ```text
 GET  /api/v1/reviews/queue
 GET  /api/v1/reviews/work-orders/:workOrderId
-POST /api/v1/work-orders/:workOrderId/request-correction
+POST /api/v1/reviews/work-orders/:workOrderId/request-correction
 POST /api/v1/work-orders/:workOrderId/approve
 
 GET  /api/v1/billing/ready

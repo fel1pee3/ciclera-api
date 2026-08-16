@@ -161,6 +161,12 @@ class TestTechnicianRepository implements TechnicianWorkOrderRepository {
     this.record = { ...this.record, status: 'AWAITING_REVIEW' };
     return Promise.resolve({ status: 'SUCCESS' });
   }
+  resumeCorrection(): ReturnType<
+    TechnicianWorkOrderRepository['resumeCorrection']
+  > {
+    this.record = { ...this.record, status: 'IN_PROGRESS' };
+    return Promise.resolve({ status: 'SUCCESS' });
+  }
 }
 
 const now = new Date('2026-08-16T12:00:00.000Z');
@@ -190,6 +196,7 @@ const workOrder = {
   actualEndAt: null,
   version: 2,
   execution: null,
+  currentCorrection: null,
 };
 const execution = {
   id: '70000000-0000-4000-8000-000000000010',

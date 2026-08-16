@@ -1,16 +1,22 @@
 import {
+  Body,
   Controller,
   Get,
   Header,
   Param,
   ParseUUIDPipe,
+  Post,
   Query,
+  Req,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { ApiCookieAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { AuthenticatedPrincipal } from '../../auth/domain/authenticated-principal';
 import { accessCookieName } from '../../auth/http/auth-cookies';
 import { CurrentPrincipal } from '../../auth/http/current-principal.decorator';
 import { Roles } from '../../auth/http/roles.decorator';
+import { getRequestId, type RequestWithId } from '../../http/request-id';
 import { formatQuantity } from '../../additional-items/domain/additional-item';
 import { formatWorkOrderNumber } from '../../work-orders/domain/work-order';
 import { ReviewsService } from '../application/reviews.service';
@@ -19,6 +25,7 @@ import {
   ReviewDetailsResponseDto,
   ReviewQueueQueryDto,
   ReviewQueueResponseDto,
+  RequestCorrectionDto,
 } from './review.dto';
 
 @ApiTags('reviews')
@@ -53,6 +60,7 @@ export class ReviewsController {
       serviceType: result.serviceType,
       location: result.location,
       equipment: result.equipment,
+      reviews: result.reviews,
       execution: {
         ...result.execution,
         evidence: result.execution.evidence.map((item) => ({
@@ -68,6 +76,23 @@ export class ReviewsController {
         })),
       },
     };
+  }
+
+  @Post('work-orders/:workOrderId/request-correction')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  requestCorrection(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Req() request: RequestWithId,
+    @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
+    @Body() input: RequestCorrectionDto,
+  ) {
+    return this.reviews.requestCorrection(
+      principal,
+      getRequestId(request),
+      workOrderId,
+      input,
+    );
   }
 }
 

@@ -73,6 +73,7 @@ describe('Work order execution draft', () => {
     if (organizationId) {
       await prisma.evidence.deleteMany({ where: { organizationId } });
       await prisma.additionalItem.deleteMany({ where: { organizationId } });
+      await prisma.review.deleteMany({ where: { organizationId } });
       await prisma.checklistResponse.deleteMany({ where: { organizationId } });
       await prisma.workOrderExecution.deleteMany({ where: { organizationId } });
       await prisma.checklistTemplate.deleteMany({ where: { organizationId } });
@@ -453,6 +454,84 @@ describe('Work order execution draft', () => {
         'Should not persist',
       ),
     ).rejects.toBeInstanceOf(WorkOrderStatusLockedError);
+
+    await reviewsService.requestCorrection(
+      owner,
+      'correction-request',
+      scheduled.id,
+      {
+        version: submitted.version,
+        reason: 'EQUIPMENT_DATA_INCORRECT',
+        description: 'Confirme o número de série registrado no atendimento.',
+      },
+    );
+    await reviewsService.requestCorrection(
+      owner,
+      'correction-repeat',
+      scheduled.id,
+      {
+        version: submitted.version,
+        reason: 'EQUIPMENT_DATA_INCORRECT',
+        description: 'Confirme o número de série registrado no atendimento.',
+      },
+    );
+    await expect(
+      prisma.review.count({
+        where: { organizationId, workOrderId: scheduled.id },
+      }),
+    ).resolves.toBe(1);
+
+    const pendingCorrection = await fieldService.find(technician, scheduled.id);
+    expect(pendingCorrection).toMatchObject({
+      status: 'PENDING_CORRECTION',
+      currentCorrection: {
+        reason: 'EQUIPMENT_DATA_INCORRECT',
+        description: 'Confirme o número de série registrado no atendimento.',
+      },
+    });
+    const resumed = await fieldService.resumeCorrection(
+      technician,
+      'correction-resume',
+      scheduled.id,
+      pendingCorrection.version,
+    );
+    expect(resumed.status).toBe('IN_PROGRESS');
+    await fieldService.resumeCorrection(
+      technician,
+      'correction-resume-repeat',
+      scheduled.id,
+      pendingCorrection.version,
+    );
+    const corrected = await fieldService.updateExecution(
+      technician,
+      'correction-save',
+      scheduled.id,
+      resumed.execution?.version ?? 0,
+      'Número de série conferido.',
+    );
+    const resubmitted = await fieldService.submitForReview(
+      technician,
+      'correction-resubmit',
+      scheduled.id,
+      corrected.execution?.version ?? 0,
+    );
+    expect(resubmitted.status).toBe('AWAITING_REVIEW');
+    await expect(
+      prisma.workOrderStatusHistory.count({
+        where: {
+          organizationId,
+          workOrderId: scheduled.id,
+          newStatus: 'AWAITING_REVIEW',
+        },
+      }),
+    ).resolves.toBe(2);
+    await expect(
+      prisma.evidence.count({
+        where: { organizationId, workOrderId: scheduled.id },
+      }),
+    ).resolves.toBe(2);
+    const rereview = await reviewsService.find(owner, scheduled.id);
+    expect(rereview.reviews).toHaveLength(1);
   });
 
   async function createScheduled(label: string) {

@@ -82,6 +82,17 @@ const technicianWorkOrderSelect = {
       },
     },
   },
+  reviews: {
+    where: { decision: 'CORRECTION_REQUESTED' },
+    select: {
+      id: true,
+      reason: true,
+      description: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 1,
+  },
 } as const;
 
 @Injectable()
@@ -458,6 +469,67 @@ export class PrismaTechnicianWorkOrderRepository implements TechnicianWorkOrderR
       return { status: 'SUCCESS' } as const;
     }, executionTransactionOptions);
   }
+
+  resumeCorrection(
+    input: Parameters<TechnicianWorkOrderRepository['resumeCorrection']>[0],
+  ) {
+    return this.prisma.$transaction(async (transaction) => {
+      const current = await transaction.workOrder.findFirst({
+        where: {
+          id: input.workOrderId,
+          organizationId: input.organizationId,
+          assignments: {
+            some: { technicianId: input.technicianId, unassignedAt: null },
+          },
+        },
+        select: {
+          status: true,
+          version: true,
+          execution: { select: { id: true } },
+        },
+      });
+      if (!current) return { status: 'NOT_FOUND' } as const;
+      if (current.status === 'IN_PROGRESS') {
+        return { status: 'ALREADY_RESUMED' } as const;
+      }
+      if (current.status !== 'PENDING_CORRECTION' || !current.execution) {
+        return { status: 'STATUS_LOCKED' } as const;
+      }
+      if (current.version !== input.expectedVersion) {
+        return { status: 'VERSION_CONFLICT' } as const;
+      }
+      const updated = await transaction.workOrder.updateMany({
+        where: {
+          id: input.workOrderId,
+          organizationId: input.organizationId,
+          status: 'PENDING_CORRECTION',
+          version: input.expectedVersion,
+        },
+        data: {
+          status: 'IN_PROGRESS',
+          actualEndAt: null,
+          version: { increment: 1 },
+        },
+      });
+      if (updated.count !== 1) return { status: 'VERSION_CONFLICT' } as const;
+      await transaction.workOrderStatusHistory.create({
+        data: {
+          organizationId: input.organizationId,
+          workOrderId: input.workOrderId,
+          previousStatus: 'PENDING_CORRECTION',
+          newStatus: 'IN_PROGRESS',
+          actorUserId: input.technicianId,
+          reason: 'CORRECTION_RESUMED',
+        },
+      });
+      await writeExecutionAudit(
+        transaction,
+        input,
+        'WORK_ORDER_CORRECTION_RESUMED',
+      );
+      return { status: 'SUCCESS' } as const;
+    }, executionTransactionOptions);
+  }
 }
 
 function completionIssues(execution: {
@@ -605,21 +677,34 @@ function mapTechnicianWorkOrder(
     select: typeof technicianWorkOrderSelect;
   }>,
 ): TechnicianWorkOrder {
-  if (!workOrder.execution) return { ...workOrder, execution: null };
+  const { reviews, ...order } = workOrder;
+  const currentCorrection =
+    reviews[0]?.reason && reviews[0].description
+      ? {
+          id: reviews[0].id,
+          reason: reviews[0].reason,
+          description: reviews[0].description,
+          requestedAt: reviews[0].createdAt,
+        }
+      : null;
+  if (!order.execution) {
+    return { ...order, execution: null, currentCorrection };
+  }
   const {
     checklistSnapshot,
     checklistResponses,
     evidence,
     additionalItems,
     ...execution
-  } = workOrder.execution;
+  } = order.execution;
   const snapshot = checklistSnapshot as unknown as ChecklistSnapshot | null;
   const responses = checklistResponses.map((response) => ({
     fieldId: response.fieldId,
     value: response.value as ChecklistAnswer['value'],
   }));
   return {
-    ...workOrder,
+    ...order,
+    currentCorrection,
     execution: {
       ...execution,
       evidence: evidence.map((item) => ({

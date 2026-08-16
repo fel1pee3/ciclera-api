@@ -110,6 +110,18 @@ export class PrismaReviewRepository implements ReviewRepository {
             },
           },
         },
+        reviews: {
+          select: {
+            id: true,
+            decision: true,
+            reason: true,
+            description: true,
+            actorUserId: true,
+            actor: { select: { name: true } },
+            createdAt: true,
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        },
       },
     });
     if (!record?.execution) return null;
@@ -158,7 +170,79 @@ export class PrismaReviewRepository implements ReviewRepository {
         })),
         additionalItems: execution.additionalItems,
       },
+      reviews: record.reviews.map(({ actor, ...item }) => ({
+        ...item,
+        actorName: actor.name,
+      })),
     };
+  }
+
+  requestCorrection(
+    input: Parameters<ReviewRepository['requestCorrection']>[0],
+  ) {
+    return this.prisma.$transaction(async (transaction) => {
+      const current = await transaction.workOrder.findUnique({
+        where: {
+          organizationId_id: {
+            organizationId: input.organizationId,
+            id: input.workOrderId,
+          },
+        },
+        select: { status: true, version: true },
+      });
+      if (!current) return { status: 'NOT_FOUND' } as const;
+      if (current.status === 'PENDING_CORRECTION') {
+        return { status: 'ALREADY_CHANGED' } as const;
+      }
+      if (current.status !== 'AWAITING_REVIEW') {
+        return { status: 'STATUS_LOCKED' } as const;
+      }
+      if (current.version !== input.expectedVersion) {
+        return { status: 'VERSION_CONFLICT' } as const;
+      }
+      const updated = await transaction.workOrder.updateMany({
+        where: {
+          id: input.workOrderId,
+          organizationId: input.organizationId,
+          status: 'AWAITING_REVIEW',
+          version: input.expectedVersion,
+        },
+        data: { status: 'PENDING_CORRECTION', version: { increment: 1 } },
+      });
+      if (updated.count !== 1) return { status: 'VERSION_CONFLICT' } as const;
+      await transaction.review.create({
+        data: {
+          organizationId: input.organizationId,
+          workOrderId: input.workOrderId,
+          actorUserId: input.actorUserId,
+          decision: 'CORRECTION_REQUESTED',
+          reason: input.reason,
+          description: input.description,
+        },
+      });
+      await transaction.workOrderStatusHistory.create({
+        data: {
+          organizationId: input.organizationId,
+          workOrderId: input.workOrderId,
+          previousStatus: 'AWAITING_REVIEW',
+          newStatus: 'PENDING_CORRECTION',
+          actorUserId: input.actorUserId,
+          reason: input.reason,
+        },
+      });
+      await transaction.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          requestId: input.requestId,
+          action: 'WORK_ORDER_CORRECTION_REQUESTED',
+          resourceType: 'WORK_ORDER',
+          resourceId: input.workOrderId,
+          metadata: { reason: input.reason },
+        },
+      });
+      return { status: 'SUCCESS' } as const;
+    });
   }
 }
 

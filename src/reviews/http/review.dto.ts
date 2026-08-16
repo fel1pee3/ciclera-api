@@ -1,6 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsIn, IsInt, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import {
+  IsIn,
+  IsInt,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
+import { reviewReasons, type ReviewReason } from '../domain/review';
 
 export class ReviewQueueQueryDto {
   @ApiPropertyOptional({ default: 1 })
@@ -30,4 +39,24 @@ export class ReviewQueueResponseDto {
 
 export class ReviewDetailsResponseDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
+}
+
+export class RequestCorrectionDto {
+  @ApiProperty({ minimum: 1 })
+  @IsInt()
+  @Min(1)
+  version!: number;
+
+  @ApiProperty({ enum: reviewReasons })
+  @IsIn(reviewReasons)
+  reason!: ReviewReason;
+
+  @ApiProperty({ minLength: 3, maxLength: 2000 })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value,
+  )
+  @IsString()
+  @MinLength(3)
+  @MaxLength(2000)
+  description!: string;
 }

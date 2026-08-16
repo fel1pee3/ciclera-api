@@ -45,6 +45,12 @@ export interface TechnicianWorkOrder {
   actualEndAt: Date | null;
   version: number;
   execution: WorkOrderExecution | null;
+  currentCorrection: {
+    id: string;
+    reason: string;
+    description: string;
+    requestedAt: Date;
+  } | null;
 }
 
 export interface WorkOrderExecution {
@@ -101,6 +107,12 @@ export type SubmitForReviewResult =
   | { status: 'EXECUTION_NOT_FOUND' }
   | { status: 'INCOMPLETE'; issues: ExecutionCompletionIssue[] };
 
+export type ResumeCorrectionResult =
+  | { status: 'SUCCESS' | 'ALREADY_RESUMED' }
+  | { status: 'NOT_FOUND' }
+  | { status: 'STATUS_LOCKED' }
+  | { status: 'VERSION_CONFLICT' };
+
 export interface TechnicianWorkOrderRepository {
   list(input: {
     organizationId: string;
@@ -150,4 +162,11 @@ export interface TechnicianWorkOrderRepository {
     expectedVersion: number;
     requestId: string;
   }): Promise<SubmitForReviewResult>;
+  resumeCorrection(input: {
+    organizationId: string;
+    technicianId: string;
+    workOrderId: string;
+    expectedVersion: number;
+    requestId: string;
+  }): Promise<ResumeCorrectionResult>;
 }

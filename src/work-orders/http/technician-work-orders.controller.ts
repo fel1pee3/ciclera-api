@@ -34,6 +34,7 @@ import {
   UpdateWorkOrderExecutionDto,
   UpdateWorkOrderChecklistDto,
   SubmitForReviewDto,
+  ResumeCorrectionDto,
 } from './technician-work-order.dto';
 
 @ApiTags('field-work-orders')
@@ -137,6 +138,26 @@ export class TechnicianWorkOrdersController {
   ): Promise<TechnicianWorkOrderResponseDto> {
     return toResponse(
       await this.workOrders.submitForReview(
+        principal,
+        getRequestId(request),
+        workOrderId,
+        input.version,
+      ),
+    );
+  }
+
+  @Post(':workOrderId/resume-correction')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ type: TechnicianWorkOrderResponseDto })
+  async resumeCorrection(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Req() request: RequestWithId,
+    @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
+    @Body() input: ResumeCorrectionDto,
+  ): Promise<TechnicianWorkOrderResponseDto> {
+    return toResponse(
+      await this.workOrders.resumeCorrection(
         principal,
         getRequestId(request),
         workOrderId,

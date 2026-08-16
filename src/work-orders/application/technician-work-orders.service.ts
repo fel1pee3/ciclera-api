@@ -123,6 +123,28 @@ export class TechnicianWorkOrdersService {
     resolveExecutionMutation(result);
     return this.find(principal, workOrderId);
   }
+
+  async resumeCorrection(
+    principal: AuthenticatedPrincipal,
+    requestId: string,
+    workOrderId: string,
+    expectedVersion: number,
+  ) {
+    const result = await this.workOrders.resumeCorrection({
+      organizationId: principal.organizationId,
+      technicianId: principal.userId,
+      workOrderId,
+      expectedVersion,
+      requestId,
+    });
+    if (result.status === 'NOT_FOUND') throw new WorkOrderNotFoundError();
+    if (result.status === 'STATUS_LOCKED')
+      throw new WorkOrderStatusLockedError();
+    if (result.status === 'VERSION_CONFLICT') {
+      throw new WorkOrderVersionConflictError();
+    }
+    return this.find(principal, workOrderId);
+  }
 }
 
 function resolveExecutionMutation(

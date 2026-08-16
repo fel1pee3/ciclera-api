@@ -86,6 +86,7 @@ export class TechnicianWorkOrderResponseDto {
   @ApiProperty() version!: number;
   @ApiProperty({ type: () => WorkOrderExecutionResponseDto, nullable: true })
   execution!: WorkOrderExecutionResponseDto | null;
+  @ApiProperty({ nullable: true }) currentCorrection!: unknown;
 }
 
 export class WorkOrderExecutionResponseDto {
@@ -127,6 +128,13 @@ export class StartWorkOrderExecutionDto {
 }
 
 export class SubmitForReviewDto {
+  @ApiProperty({ minimum: 1 })
+  @IsInt()
+  @Min(1)
+  version!: number;
+}
+
+export class ResumeCorrectionDto {
   @ApiProperty({ minimum: 1 })
   @IsInt()
   @Min(1)

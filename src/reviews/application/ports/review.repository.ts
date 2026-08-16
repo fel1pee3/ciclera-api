@@ -3,6 +3,7 @@ import type {
   ChecklistSnapshot,
 } from '../../../checklists/domain/checklist';
 import type { WorkOrderPriority } from '../../../work-orders/domain/work-order';
+import type { ReviewReason, ReviewRecord } from '../../domain/review';
 
 export const REVIEW_REPOSITORY = Symbol('REVIEW_REPOSITORY');
 
@@ -51,7 +52,14 @@ export interface ReviewDetails extends ReviewQueueItem {
       totalAmountInCents: bigint;
     }>;
   };
+  reviews: ReviewRecord[];
 }
+
+export type ReviewMutationResult =
+  | { status: 'SUCCESS' | 'ALREADY_CHANGED' }
+  | { status: 'NOT_FOUND' }
+  | { status: 'STATUS_LOCKED' }
+  | { status: 'VERSION_CONFLICT' };
 
 export interface ReviewRepository {
   list(input: {
@@ -69,4 +77,13 @@ export interface ReviewRepository {
     organizationId: string,
     workOrderId: string,
   ): Promise<ReviewDetails | null>;
+  requestCorrection(input: {
+    organizationId: string;
+    actorUserId: string;
+    requestId: string;
+    workOrderId: string;
+    expectedVersion: number;
+    reason: ReviewReason;
+    description: string;
+  }): Promise<ReviewMutationResult>;
 }

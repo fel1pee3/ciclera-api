@@ -62,6 +62,22 @@ enum AdditionalItemType {
   ADDITIONAL_HOUR
 }
 
+enum ReviewDecision {
+  CORRECTION_REQUESTED
+  APPROVED
+}
+
+enum ReviewReason {
+  REQUIRED_PHOTO_MISSING
+  SIGNATURE_MISSING
+  CHECKLIST_INCOMPLETE
+  MATERIAL_WITHOUT_VALUE
+  ADDITIONAL_SERVICE_UNAPPROVED
+  EQUIPMENT_DATA_INCORRECT
+  INCONSISTENT_SCHEDULE
+  OTHER
+}
+
 model Organization {
   id                     String                   @id @default(uuid()) @db.Uuid
   name                   String                   @db.VarChar(160)
@@ -80,6 +96,7 @@ model Organization {
   checklistResponses     ChecklistResponse[]
   evidence               Evidence[]
   additionalItems        AdditionalItem[]
+  reviews                Review[]
   workOrderCounter       WorkOrderCounter?
   createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -202,6 +219,7 @@ model User {
   createdEvidence           Evidence[]               @relation("EvidenceCreator")
   createdAdditionalItems    AdditionalItem[]         @relation("AdditionalItemCreator")
   updatedAdditionalItems    AdditionalItem[]         @relation("AdditionalItemUpdater")
+  reviewsCreated            Review[]                 @relation("ReviewActor")
   createdAt                 DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -254,6 +272,7 @@ model WorkOrder {
   execution             WorkOrderExecution?
   evidence              Evidence[]
   additionalItems       AdditionalItem[]
+  reviews               Review[]
   createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -401,6 +420,25 @@ model ChecklistResponse {
   @@unique([organizationId, executionId, fieldId])
   @@index([organizationId, executionId, updatedAt])
   @@map("checklist_responses")
+}
+
+model Review {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workOrderId    String         @map("work_order_id") @db.Uuid
+  workOrder      WorkOrder      @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  actorUserId    String         @map("actor_user_id") @db.Uuid
+  actor          User           @relation("ReviewActor", fields: [organizationId, actorUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
+  decision       ReviewDecision
+  reason         ReviewReason?
+  description    String?        @db.VarChar(2000)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, workOrderId, createdAt(sort: Desc), id])
+  @@index([organizationId, decision, createdAt(sort: Desc), id])
+  @@map("reviews")
 }
 
 model WorkOrderStatusHistory {
