@@ -19,8 +19,7 @@ adapters privados e compartilhados, com contrato equivalente às portas atuais.
 ## Topologia mínima
 
 - Web e API em HTTPS, com origens fixas e separadas.
-- PostgreSQL exclusivo de staging, sem reutilizar `ciclera_dev` ou
-  `ciclera_test`.
+- PostgreSQL exclusivo de staging, sem reutilizar o banco local `ciclera`.
 - Object storage privado, separado de produção, sem acesso público ao bucket.
 - Rate limiter compartilhado entre réplicas.
 - Secrets em cofre/variáveis protegidas da plataforma, nunca em arquivos ou

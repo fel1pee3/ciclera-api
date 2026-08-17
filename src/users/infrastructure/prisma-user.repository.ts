@@ -95,55 +95,105 @@ export class PrismaUserRepository implements UserRepository {
     }
   }
 
-  update(
+  async update(
     input: Parameters<UserRepository['update']>[0],
   ): Promise<UpdateUserResult> {
-    return this.prisma.$transaction(
-      async (transaction) => {
-        const current = await transaction.user.findUnique({
-          where: {
-            organizationId_id: {
-              organizationId: input.organizationId,
-              id: input.userId,
+    try {
+      return await this.prisma.$transaction(
+        async (transaction) => {
+          const current = await transaction.user.findUnique({
+            where: {
+              organizationId_id: {
+                organizationId: input.organizationId,
+                id: input.userId,
+              },
             },
-          },
-          select: managedUserSelect,
-        });
-        if (!current) return { status: 'NOT_FOUND' };
-
-        if (
-          current.role === 'OWNER' &&
-          input.role &&
-          input.role !== 'OWNER' &&
-          current.status === 'ACTIVE' &&
-          (await activeOwnerCount(transaction, input.organizationId)) <= 1
-        ) {
-          return { status: 'LAST_OWNER' };
-        }
-
-        const user = await transaction.user.update({
-          where: {
-            organizationId_id: {
-              organizationId: input.organizationId,
-              id: input.userId,
-            },
-          },
-          data: {
-            ...(input.name === undefined ? {} : { name: input.name }),
-            ...(input.role === undefined ? {} : { role: input.role }),
-          },
-          select: managedUserSelect,
-        });
-        if (current.role !== user.role) {
-          await writeAudit(transaction, input, user.id, 'USER_ROLE_CHANGED', {
-            from: current.role,
-            to: user.role,
+            select: managedUserSelect,
           });
-        }
-        return { status: 'UPDATED', user };
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
+          if (!current) return { status: 'NOT_FOUND' };
+
+          if (
+            current.role === 'OWNER' &&
+            input.role &&
+            input.role !== 'OWNER' &&
+            current.status === 'ACTIVE' &&
+            (await activeOwnerCount(transaction, input.organizationId)) <= 1
+          ) {
+            return { status: 'LAST_OWNER' };
+          }
+
+          const user = await transaction.user.update({
+            where: {
+              organizationId_id: {
+                organizationId: input.organizationId,
+                id: input.userId,
+              },
+            },
+            data: {
+              ...(input.name === undefined ? {} : { name: input.name }),
+              ...(input.email === undefined
+                ? {}
+                : {
+                    email: input.email,
+                    normalizedEmail: input.normalizedEmail,
+                  }),
+              ...(input.passwordHash === undefined
+                ? {}
+                : { passwordHash: input.passwordHash }),
+              ...(input.role === undefined ? {} : { role: input.role }),
+            },
+            select: managedUserSelect,
+          });
+          if (current.role !== user.role) {
+            await writeAudit(transaction, input, user.id, 'USER_ROLE_CHANGED', {
+              from: current.role,
+              to: user.role,
+            });
+          }
+          if (input.email !== undefined && current.email !== user.email) {
+            await writeAudit(
+              transaction,
+              input,
+              user.id,
+              'USER_EMAIL_CHANGED',
+              {
+                changed: true,
+              },
+            );
+          }
+          if (input.passwordHash !== undefined) {
+            await transaction.session.updateMany({
+              where: {
+                organizationId: input.organizationId,
+                userId: input.userId,
+                revokedAt: null,
+              },
+              data: {
+                revokedAt: new Date(),
+                revocationReason: 'PASSWORD_CHANGED',
+              },
+            });
+            await writeAudit(
+              transaction,
+              input,
+              user.id,
+              'USER_PASSWORD_CHANGED',
+              { sessionsRevoked: true },
+            );
+          }
+          return { status: 'UPDATED', user };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return { status: 'EMAIL_CONFLICT' };
+      }
+      throw error;
+    }
   }
 
   setStatus(

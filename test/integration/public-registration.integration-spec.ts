@@ -202,7 +202,6 @@ describe('Public registration persistence', () => {
         ownerName: 'Maria Owner',
         email,
         password,
-        timezone: 'America/Sao_Paulo',
         termsAccepted: true,
         termsVersion: currentLegalVersion,
       });

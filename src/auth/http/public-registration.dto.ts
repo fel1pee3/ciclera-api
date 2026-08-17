@@ -5,7 +5,7 @@ import {
   IsBoolean,
   IsEmail,
   IsString,
-  IsTimeZone,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -14,10 +14,6 @@ import { normalizeEmailInput } from './auth-input.transforms';
 
 function trimName({ value }: { value: unknown }): unknown {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value;
-}
-
-function trimString({ value }: { value: unknown }): unknown {
-  return typeof value === 'string' ? value.trim() : value;
 }
 
 export class PublicRegistrationRequestDto {
@@ -49,22 +45,22 @@ export class PublicRegistrationRequestDto {
   })
   email!: string;
 
-  @ApiProperty({ format: 'password', minLength: 8, maxLength: 128 })
+  @ApiProperty({
+    format: 'password',
+    minLength: 10,
+    maxLength: 128,
+    description: 'Deve conter letras maiúscula e minúscula, número e símbolo.',
+  })
   @IsString({ message: 'Informe a senha.' })
-  @MinLength(8, { message: 'A senha deve ter pelo menos 8 caracteres.' })
+  @MinLength(10, { message: 'A senha deve ter pelo menos 10 caracteres.' })
   @MaxLength(128, {
     message: 'A senha deve ter no m\u00e1ximo 128 caracteres.',
   })
+  @Matches(/[A-Z]/, { message: 'A senha deve conter uma letra maiúscula.' })
+  @Matches(/[a-z]/, { message: 'A senha deve conter uma letra minúscula.' })
+  @Matches(/\d/, { message: 'A senha deve conter um número.' })
+  @Matches(/[^A-Za-z0-9\s]/, { message: 'A senha deve conter um símbolo.' })
   password!: string;
-
-  @ApiProperty({ example: 'America/Sao_Paulo', maxLength: 64 })
-  @Transform(trimString)
-  @IsString({ message: 'Informe o fuso hor\u00e1rio.' })
-  @MaxLength(64, {
-    message: 'O fuso hor\u00e1rio deve ter no m\u00e1ximo 64 caracteres.',
-  })
-  @IsTimeZone({ message: 'Informe um fuso hor\u00e1rio IANA v\u00e1lido.' })
-  timezone!: string;
 
   @ApiProperty({ example: true })
   @IsBoolean({ message: 'Confirme o aceite dos termos e da privacidade.' })

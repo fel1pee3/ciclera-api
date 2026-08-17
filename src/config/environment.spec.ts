@@ -6,8 +6,9 @@ import {
 
 const validEnvironment = {
   NODE_ENV: 'development',
-  DATABASE_URL: 'postgresql://user:password@localhost:55432/ciclera_dev',
-  TEST_DATABASE_URL: 'postgresql://user:password@localhost:55432/ciclera_test',
+  DATABASE_URL: 'postgresql://user:password@localhost:55432/ciclera',
+  TEST_DATABASE_URL:
+    'postgresql://user:password@localhost:55432/ciclera?schema=ciclera_test_unit',
   WEB_URL: 'http://localhost:3000',
   CORS_ORIGINS: 'http://localhost:3000,http://127.0.0.1:3000',
   JWT_ACCESS_SECRET: 'test-only-access-secret-with-at-least-32-characters',
@@ -126,5 +127,16 @@ describe('validateEnvironment', () => {
     expect(() => getRuntimeDatabaseUrl(environment)).toThrow(
       'TEST_DATABASE_URL is required in test.',
     );
+  });
+
+  it('rejects tests that target the manual-data schema', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        NODE_ENV: 'test',
+        TEST_DATABASE_URL:
+          'postgresql://user:password@localhost:55432/ciclera?schema=public',
+      }),
+    ).toThrow(/isolated test schema/);
   });
 });

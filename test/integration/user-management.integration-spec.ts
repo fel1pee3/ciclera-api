@@ -169,7 +169,7 @@ describe('User management persistence', () => {
     ).rejects.toBeInstanceOf(LastOwnerRequiredError);
   });
 
-  it('revokes sessions and audits role and status changes', async () => {
+  it('updates access data, revokes sessions, and audits sensitive changes', async () => {
     const target = await users.create(context(ownerA, 'req_target_create'), {
       name: 'Alvo de alteração',
       email: `target-${suffix}@example.test`,
@@ -187,6 +187,8 @@ describe('User management persistence', () => {
 
     await users.update(context(ownerA, 'req_role_change'), target.id, {
       role: 'ADMIN',
+      email: `updated-target-${suffix}@example.test`,
+      password: 'UpdatedLocal!2026',
     });
     await users.setStatus(
       context(ownerA, 'req_status_change'),
@@ -194,22 +196,40 @@ describe('User management persistence', () => {
       'INACTIVE',
     );
 
-    const [storedSession, audits] = await Promise.all([
+    const [storedUser, storedSession, audits] = await Promise.all([
+      prisma.user.findUniqueOrThrow({
+        where: { id: target.id },
+        select: { email: true, normalizedEmail: true, passwordHash: true },
+      }),
       prisma.session.findUniqueOrThrow({ where: { id: session.id } }),
       prisma.auditLog.findMany({
         where: {
           organizationId: ownerA.organizationId,
           resourceId: target.id,
-          action: { in: ['USER_ROLE_CHANGED', 'USER_DEACTIVATED'] },
+          action: {
+            in: [
+              'USER_ROLE_CHANGED',
+              'USER_EMAIL_CHANGED',
+              'USER_PASSWORD_CHANGED',
+              'USER_DEACTIVATED',
+            ],
+          },
         },
         orderBy: { createdAt: 'asc' },
       }),
     ]);
+    expect(storedUser).toMatchObject({
+      email: `updated-target-${suffix}@example.test`,
+      normalizedEmail: `updated-target-${suffix}@example.test`,
+    });
+    expect(storedUser.passwordHash).not.toContain('UpdatedLocal!2026');
     expect(storedSession).toMatchObject({
-      revocationReason: 'USER_DEACTIVATED',
+      revocationReason: 'PASSWORD_CHANGED',
     });
     expect(storedSession.revokedAt).toBeInstanceOf(Date);
     expect(audits.map((audit) => audit.requestId)).toEqual([
+      'req_role_change',
+      'req_role_change',
       'req_role_change',
       'req_status_change',
     ]);

@@ -2,41 +2,11 @@ import pg from 'pg';
 
 const { Client } = pg;
 
-const targets = {
-  development: {
-    databaseNameVariable: 'POSTGRES_DB',
-    urlVariable: 'DATABASE_URL',
-  },
-  test: {
-    databaseNameVariable: 'POSTGRES_TEST_DB',
-    urlVariable: 'TEST_DATABASE_URL',
-  },
-};
-
-const targetName = process.argv[2] ?? 'development';
-const target = targets[targetName];
-
-if (!target) {
-  throw new Error('Database target must be either "development" or "test".');
-}
-
-const connectionString = process.env[target.urlVariable];
-const expectedDatabaseName = process.env[target.databaseNameVariable];
-const developmentDatabaseName = process.env.POSTGRES_DB;
-const testDatabaseName = process.env.POSTGRES_TEST_DB;
+const connectionString = process.env.DATABASE_URL;
+const expectedDatabaseName = process.env.POSTGRES_DB;
 
 if (!connectionString || !expectedDatabaseName) {
-  throw new Error(
-    `${target.urlVariable} and ${target.databaseNameVariable} must be set.`,
-  );
-}
-
-if (
-  !developmentDatabaseName ||
-  !testDatabaseName ||
-  developmentDatabaseName === testDatabaseName
-) {
-  throw new Error('Development and test databases must have different names.');
+  throw new Error('DATABASE_URL and POSTGRES_DB must be set.');
 }
 
 const databaseUrl = new URL(connectionString);
@@ -68,12 +38,12 @@ try {
   const connection = result.rows[0];
 
   if (connection?.database_name !== expectedDatabaseName) {
-    throw new Error(`Connected to an unexpected ${targetName} database.`);
+    throw new Error('Connected to an unexpected local database.');
   }
 
   const port = databaseUrl.port || '5432';
   console.log(
-    `Connected to ${targetName} database "${connection.database_name}" as "${connection.user_name}" at ${databaseUrl.hostname}:${port}.`,
+    `Connected to local database "${connection.database_name}" as "${connection.user_name}" at ${databaseUrl.hostname}:${port}.`,
   );
 } finally {
   await client.end();

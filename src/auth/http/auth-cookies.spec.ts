@@ -11,9 +11,9 @@ describe('AuthCookieService', () => {
   it('uses Secure in production and clears cookies with matching security attributes', () => {
     const environment = validateEnvironment({
       NODE_ENV: 'test',
-      DATABASE_URL: 'postgresql://user:password@localhost:55432/ciclera_test',
+      DATABASE_URL: 'postgresql://user:password@localhost:55432/ciclera',
       TEST_DATABASE_URL:
-        'postgresql://user:password@localhost:55432/ciclera_test',
+        'postgresql://user:password@localhost:55432/ciclera?schema=ciclera_test_unit',
       WEB_URL: 'https://app.ciclera.example',
       CORS_ORIGINS: 'https://app.ciclera.example',
       JWT_ACCESS_SECRET: 'test-only-access-secret-with-at-least-32-characters',

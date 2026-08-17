@@ -82,7 +82,10 @@ export class UsersController {
 
   @Patch(':userId')
   @Header('Cache-Control', 'no-store')
-  @ApiOperation({ summary: 'Altera nome ou perfil conforme a política.' })
+  @ApiOperation({
+    summary: 'Altera dados de acesso ou perfil conforme a política.',
+  })
+  @ApiConflictResponse({ description: 'E-mail já utilizado.' })
   @ApiOkResponse({ type: UserResponseDto })
   update(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,

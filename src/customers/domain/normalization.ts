@@ -15,6 +15,12 @@ export function normalizedDocument(value: string | null | undefined) {
   return normalized || null;
 }
 
+export function digitsOnly(value: string | null | undefined) {
+  if (!value) return null;
+  const normalized = value.replace(/\D/g, '');
+  return normalized || null;
+}
+
 export function optionalText(value: string | null | undefined) {
   if (value === null || value === undefined) return null;
   const normalized = displayText(value);

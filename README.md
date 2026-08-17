@@ -91,9 +91,7 @@ npm ci
 Copy-Item .env.example .env
 docker compose up -d --wait postgres
 npm run db:check
-npm run db:check:test
 npm run db:migrate:dev
-npm run db:seed
 npm run test:integration
 npm run start:dev
 ```
@@ -147,14 +145,19 @@ são persistidos.
 
 O PostgreSQL local pertence à infraestrutura da API e está definido em `compose.yaml`. A porta é publicada somente em `127.0.0.1`, as credenciais ficam no `.env` ignorado pelo Git e os dados persistem no volume nomeado `ciclera-api-postgres-data`.
 
-Por padrão, a porta `5432` do container é publicada como `55432` no host para evitar conflitos com instalações locais. Se `POSTGRES_PORT` for alterada, atualize também `DATABASE_URL` e `TEST_DATABASE_URL` no `.env`.
+Por padrão, a porta `5432` do container é publicada como `55432` no host para evitar conflitos com instalações locais. Se `POSTGRES_PORT` for alterada, atualize também `DATABASE_URL` no `.env`.
 
-O container cria dois bancos distintos na primeira inicialização do volume:
+O container mantém um único banco persistente:
 
-- `ciclera_dev`: desenvolvimento local, acessado por `DATABASE_URL`.
-- `ciclera_test`: migrations e testes automatizados de integração, acessado exclusivamente por `TEST_DATABASE_URL`.
+- `ciclera`: usado pela aplicação local e acessado por `DATABASE_URL`.
 
-Antes de iniciar, copie `.env.example` para `.env` e substitua a senha fictícia nas três ocorrências: `POSTGRES_PASSWORD`, `DATABASE_URL` e `TEST_DATABASE_URL`.
+Antes de iniciar, copie `.env.example` para `.env` e substitua a senha fictícia nas duas ocorrências: `POSTGRES_PASSWORD` e `DATABASE_URL`.
+
+Os testes E2E e de integração criam um schema temporário com prefixo
+`ciclera_test_` dentro do mesmo banco, aplicam migrations e removem todo o
+schema ao terminar. `TEST_DATABASE_URL` é gerada somente pelo executor dos
+testes e não deve ser persistida no `.env`. O schema `public`, que guarda os
+dados inseridos manualmente, nunca é usado pelos testes.
 
 Validar a configuração e iniciar somente o PostgreSQL:
 
@@ -164,11 +167,10 @@ docker compose up -d --wait postgres
 docker compose ps
 ```
 
-Confirmar pela aplicação Node.js que os dois bancos aceitam conexão:
+Confirmar pela aplicação Node.js que o banco aceita conexão:
 
 ```bash
 npm run db:check
-npm run db:check:test
 ```
 
 Parar e iniciar novamente, preservando container e volume:
@@ -184,14 +186,14 @@ Remover o container e a rede, preservando os dados:
 docker compose down
 ```
 
-Recriar somente a infraestrutura local do banco, apagando os dados de desenvolvimento e teste:
+Recriar somente a infraestrutura local do banco, apagando todos os dados inseridos manualmente:
 
 ```bash
 docker compose down --volumes
 docker compose up -d --wait postgres
 ```
 
-> `docker compose down --volumes` é destrutivo para os dois bancos locais. Não utilize esse comando se houver dados locais que precisem ser preservados.
+> `docker compose down --volumes` é destrutivo. Não utilize esse comando se houver dados locais que precisem ser preservados.
 
 ## Scripts esperados
 
@@ -203,16 +205,13 @@ docker compose up -d --wait postgres
 | `npm run start:prod` | Executar `dist/main.js`, o entrypoint convencional de produção |
 | `npm run lint` | Executar lint |
 | `npm run typecheck` | Validar tipos sem gerar build |
-| `npm run db:check` | Validar a conexão Node.js com o banco de desenvolvimento |
-| `npm run db:check:test` | Validar a conexão Node.js com o banco de testes separado |
-| `npm run db:migrate:dev` | Criar e aplicar migrations no banco local de desenvolvimento |
+| `npm run db:check` | Validar a conexão Node.js com o banco local |
+| `npm run db:migrate:dev` | Criar e aplicar migrations no banco local |
 | `npm run db:migrate:deploy` | Aplicar migrations já versionadas no ambiente selecionado |
-| `npm run db:seed` | Criar ou reconciliar o seed demonstrativo no banco local de desenvolvimento |
-| `npm run db:seed:test` | Criar ou reconciliar o seed exclusivamente em `TEST_DATABASE_URL` |
 | `npm run prisma:generate` | Gerar o Prisma Client a partir do schema versionado |
 | `npm run prisma:validate` | Validar o schema Prisma sem alterar o banco |
 | `npm test` | Executar testes unitários |
-| `npm run test:integration` | Aplicar migrations e executar testes isolados em `TEST_DATABASE_URL` |
+| `npm run test:integration` | Criar um schema temporário, aplicar migrations, testar e removê-lo |
 | `npm run test:watch` | Executar testes em modo interativo |
 | `npm run test:e2e` | Executar os testes HTTP end-to-end da fundação da API |
 | `npm run format` | Formatar os arquivos TypeScript |
@@ -223,8 +222,8 @@ Não documentar scripts inexistentes indefinidamente. Criá-los ou atualizar a t
 O build NestJS usa `src` como `rootDir` explícito. O resultado esperado contém
 `dist/main.js` e os módulos importados pela aplicação, sem `dist/prisma`,
 `dist/test` ou `dist/src/main.js`. `prisma/seed.ts` não participa do artefato de
-produção e continua sendo executado exclusivamente pelos scripts `db:seed` e
-`db:seed:test` com `ts-node`. O build de produção desabilita o cache incremental
+produção e é executado somente no schema temporário criado pelos testes de
+integração. O build de produção desabilita o cache incremental
 para que a remoção de `dist` nunca seja seguida por uma emissão parcial baseada
 em um `.tsbuildinfo` externo ao diretório de saída.
 
@@ -248,13 +247,12 @@ As variáveis da fundação HTTP, da infraestrutura PostgreSQL, do Prisma, da au
 | --- | ---: | --- |
 | `POSTGRES_USER` | Local | Usuário exclusivamente local criado pelo container |
 | `POSTGRES_PASSWORD` | Local | Senha exclusivamente local, definida apenas no `.env` |
-| `POSTGRES_DB` | Local | Nome do banco de desenvolvimento |
-| `POSTGRES_TEST_DB` | Local | Nome distinto do banco de testes |
+| `POSTGRES_DB` | Local | Nome do único banco local persistente |
 | `POSTGRES_PORT` | Local | Porta publicada somente em loopback |
 | `NODE_ENV` | Sim | Ambiente de execução |
 | `PORT` | Não | Porta HTTP; padrão `3333` |
-| `DATABASE_URL` | Sim | Conexão local com o banco de desenvolvimento |
-| `TEST_DATABASE_URL` | Em `test` | Conexão com o banco de testes separado e usada pelo readiness durante testes |
+| `DATABASE_URL` | Sim | Conexão com o banco local e seu schema `public` |
+| `TEST_DATABASE_URL` | Interna | Gerada temporariamente pelos executores de testes; não persiste no `.env` |
 | `DIRECT_DATABASE_URL` | Conforme infraestrutura | Conexão direta para migrations quando houver pooler |
 | `WEB_URL` | Em produção | URL principal do frontend; padrão local `http://localhost:3000` em desenvolvimento e testes |
 | `CORS_ORIGINS` | Em produção | Origens HTTP(S) explícitas, separadas por vírgula; usa `WEB_URL` localmente quando omitida |
@@ -350,12 +348,10 @@ PASSWORD_RESET_DELIVERY_MODE=local
 
 POSTGRES_USER=ciclera_local
 POSTGRES_PASSWORD=replace-with-a-local-only-password
-POSTGRES_DB=ciclera_dev
-POSTGRES_TEST_DB=ciclera_test
+POSTGRES_DB=ciclera
 POSTGRES_PORT=55432
 
-DATABASE_URL=postgresql://ciclera_local:replace-with-a-local-only-password@localhost:55432/ciclera_dev
-TEST_DATABASE_URL=postgresql://ciclera_local:replace-with-a-local-only-password@localhost:55432/ciclera_test
+DATABASE_URL=postgresql://ciclera_local:replace-with-a-local-only-password@localhost:55432/ciclera
 ```
 
 Regras:
@@ -1510,7 +1506,7 @@ GET /health/ready
 
 - Liveness retorna `200` com `{"status":"ok"}` sem consultar dependências pesadas.
 - Readiness executa uma consulta mínima no PostgreSQL e retorna `200` com o estado do banco ou `503` no formato centralizado de erro.
-- Em `NODE_ENV=test`, readiness usa `TEST_DATABASE_URL`; nos demais ambientes, usa `DATABASE_URL`.
+- Em `NODE_ENV=test`, readiness usa o schema temporário indicado por `TEST_DATABASE_URL`; nos demais ambientes, usa `DATABASE_URL`.
 - Não incluir informações sensíveis na resposta.
 - Não executar verificações externas caras a cada probe.
 - Storage e e-mail podem possuir diagnóstico separado se não forem necessários para toda requisição.
@@ -1599,7 +1595,10 @@ npm run db:migrate:dev
 npm run test:integration
 ```
 
-O executor de integração recusa bancos remotos, exige que os bancos de desenvolvimento e teste tenham nomes distintos e confirma o banco conectado antes de escrever. Ele aplica migrations e executa o Jest somente com `TEST_DATABASE_URL`; a limpeza é restrita aos registros criados pelo próprio teste.
+Os executores de E2E e integração recusam bancos remotos e geram
+`TEST_DATABASE_URL` para um schema temporário com prefixo controlado. Eles
+aplicam migrations nesse schema e o removem integralmente ao final, inclusive
+quando algum teste falha, sem escrever no schema `public`.
 
 ### Migrations
 
@@ -1629,108 +1628,17 @@ Para mudanças incompatíveis em produção, preferir sequência expand, migrate
 3. Migrar ou preencher dados.
 4. Remover estrutura antiga somente após validação.
 
-## Seed de desenvolvimento
+## Dados locais e fixtures automatizadas
 
-O seed deve ser determinístico, idempotente quando viável e explicitamente bloqueado em produção.
+O banco local inicia sem organizações, usuários ou dados operacionais. Crie a
+primeira organização pela rota pública `/registro` e adicione os demais dados
+manualmente pelos fluxos do produto. Não existe comando de seed para o schema
+`public`.
 
-O seed de identidade implementado cria duas organizações visualmente distintas e, em cada uma, um `OWNER`, um `ADMIN` e um `TECHNICIAN`. Ele aceita somente `NODE_ENV=development` ou `test`, exige URLs PostgreSQL locais e bancos de desenvolvimento e teste distintos, e nunca utiliza `DATABASE_URL` como fallback durante testes.
-
-Executar duas vezes é seguro e não duplica organizações ou usuários:
-
-```bash
-npm run db:seed
-npm run db:seed
-```
-
-Credencial pública exclusivamente demonstrativa e local:
-
-| Organização | Perfil | E-mail |
-| --- | --- | --- |
-| Organização A | `OWNER` | `owner.a@demo.ciclera.local` |
-| Organização A | `ADMIN` | `admin.a@demo.ciclera.local` |
-| Organização A | `TECHNICIAN` | `technician.a@demo.ciclera.local` |
-| Organização B | `OWNER` | `owner.b@demo.ciclera.local` |
-| Organização B | `ADMIN` | `admin.b@demo.ciclera.local` |
-| Organização B | `TECHNICIAN` | `technician.b@demo.ciclera.local` |
-
-Todos usam a senha demonstrativa `CicleraLocalOnly!2026`. Ela é pública, não é secret e nunca deve ser reutilizada fora do ambiente local. O banco persiste somente hashes Argon2id com salts independentes. Após executar o seed, essas contas podem ser usadas somente no login local documentado abaixo.
-
-Exemplo manual sem expor tokens no terminal; o arquivo temporário recebe os
-cookies e deve ser removido ao final:
-
-```bash
-curl -i -c .ciclera-local-cookies.txt \
-  -H "Origin: http://localhost:3000" \
-  -H "Content-Type: application/json" \
-  -d '{"email":"owner.a@demo.ciclera.local","password":"CicleraLocalOnly!2026"}' \
-  http://localhost:3333/api/v1/auth/login
-
-curl -i -b .ciclera-local-cookies.txt \
-  http://localhost:3333/api/v1/auth/me
-
-curl -i -b .ciclera-local-cookies.txt -c .ciclera-local-cookies.txt \
-  -H "Origin: http://localhost:3000" \
-  -X POST http://localhost:3333/api/v1/auth/refresh
-
-curl -i -b .ciclera-local-cookies.txt -c .ciclera-local-cookies.txt \
-  -H "Origin: http://localhost:3000" \
-  -X POST http://localhost:3333/api/v1/auth/logout
-```
-
-Recuperação local: faça a solicitação e copie o valor depois de `#token=` do
-evento `auth.password-reset.local-delivery` exibido exclusivamente no terminal
-da API em desenvolvimento. A rota visual `/redefinir-senha` pertence ao CP-10;
-até lá, envie o token diretamente para a API:
-
-```powershell
-$headers = @{ Origin = 'http://localhost:3000' }
-$forgotBody = @{ email = 'owner.a@demo.ciclera.local' } | ConvertTo-Json
-
-Invoke-WebRequest `
-  -Uri 'http://localhost:3333/api/v1/auth/forgot-password' `
-  -Method Post `
-  -Headers $headers `
-  -ContentType 'application/json' `
-  -Body $forgotBody
-
-$resetBody = @{
-  token = 'COLE_AQUI_O_TOKEN_LOCAL'
-  password = 'NovaSenhaLocal!2026'
-} | ConvertTo-Json
-
-Invoke-WebRequest `
-  -Uri 'http://localhost:3333/api/v1/auth/reset-password' `
-  -Method Post `
-  -Headers $headers `
-  -ContentType 'application/json' `
-  -Body $resetBody
-```
-
-O link e o token locais são credenciais temporárias. Não os envie para logs de
-produção, tickets ou analytics.
-
-`.ciclera-local-cookies.txt` está ignorado pelo Git e deve ser removido depois
-do teste porque contém credenciais temporárias de sessão.
-
-O `npm run test:integration` aplica migrations e executa o seed duas vezes somente em `TEST_DATABASE_URL`. O teste valida perfis, isolamento, unicidade, hashes e bloqueios de ambiente, e remove apenas os IDs reservados criados pelo próprio seed.
-
-O conteúdo operacional abaixo representa a evolução final esperada do seed após os respectivos models serem implementados em checkpoints posteriores; ele não faz parte do CP-06:
-
-Conteúdo mínimo:
-
-- Duas organizações distintas.
-- Um `OWNER` e um `ADMIN`.
-- Pelo menos dois `TECHNICIAN`.
-- Clientes, locais e equipamentos fictícios.
-- Ordens em todos os estados relevantes.
-- Uma execução completa aguardando revisão.
-- Uma ordem com pendência.
-- Uma ordem pronta para faturar.
-- Uma ordem faturada.
-
-Credenciais de seed devem ser apenas de desenvolvimento, documentadas localmente e nunca reutilizadas em produção.
-
-As duas organizações são obrigatórias para permitir testes manuais e automatizados de isolamento multi-tenant.
+As fixtures demonstrativas continuam existindo exclusivamente para os testes
+automatizados. `npm run test:integration` cria um schema temporário, aplica as
+migrations, executa o seed idempotente nesse schema e o remove ao terminar. As
+fixtures nunca são gravadas junto dos dados inseridos manualmente.
 
 ## Testes
 

@@ -94,7 +94,6 @@ export class AuthController {
       ownerName: input.ownerName,
       email: input.email,
       password: input.password,
-      timezone: input.timezone,
       termsVersion: input.termsVersion,
       requestId: getRequestId(request),
     });

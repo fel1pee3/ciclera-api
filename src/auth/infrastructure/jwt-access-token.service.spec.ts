@@ -12,8 +12,9 @@ const session: ResolvedSession = {
 
 const rawEnvironment = {
   NODE_ENV: 'test',
-  DATABASE_URL: 'postgresql://user:password@localhost:55432/ciclera_dev',
-  TEST_DATABASE_URL: 'postgresql://user:password@localhost:55432/ciclera_test',
+  DATABASE_URL: 'postgresql://user:password@localhost:55432/ciclera',
+  TEST_DATABASE_URL:
+    'postgresql://user:password@localhost:55432/ciclera?schema=ciclera_test_unit',
   WEB_URL: 'http://localhost:3000',
   CORS_ORIGINS: 'http://localhost:3000',
   JWT_ACCESS_SECRET: 'test-only-access-secret-with-at-least-32-characters',

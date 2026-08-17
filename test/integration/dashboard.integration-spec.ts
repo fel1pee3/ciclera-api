@@ -123,6 +123,13 @@ describe('Revenue assurance dashboard', () => {
     }).format(new Date());
     const result = await dashboard.summary(owner, { from: today, to: today });
     expect(result.timezone).toBe('America/Sao_Paulo');
+    expect(result.setup).toEqual({
+      activeUserCount: 2,
+      customerCount: 1,
+      locationCount: 1,
+      equipmentCount: 0,
+      workOrderCount: 1,
+    });
     expect(result.stages.PENDING_CORRECTION).toEqual({
       count: 1,
       amountInCents: 12_500n,

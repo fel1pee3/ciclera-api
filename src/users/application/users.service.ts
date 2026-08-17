@@ -77,19 +77,35 @@ export class UsersService {
   async update(
     context: RequestContext,
     userId: string,
-    input: { name?: string; role?: UserRole },
+    input: {
+      name?: string;
+      email?: string;
+      password?: string;
+      role?: UserRole;
+    },
   ) {
-    if (input.name === undefined && input.role === undefined) {
+    if (
+      input.name === undefined &&
+      input.email === undefined &&
+      input.password === undefined &&
+      input.role === undefined
+    ) {
       throw new EmptyUserUpdateError();
     }
     const target = await this.find(context, userId);
     if (input.role) this.requireCanManage(context.principal, input.role);
+    const email =
+      input.email === undefined ? undefined : normalizeEmail(input.email);
     const result = await this.users.update({
       organizationId: context.principal.organizationId,
       actorUserId: context.principal.userId,
       requestId: context.requestId,
       userId,
       ...(input.name === undefined ? {} : { name: normalizeName(input.name) }),
+      ...(email === undefined ? {} : { email, normalizedEmail: email }),
+      ...(input.password === undefined
+        ? {}
+        : { passwordHash: await this.passwords.hash(input.password) }),
       ...(input.role === undefined ? {} : { role: input.role }),
     });
     return resolveUpdateResult(result, target);
@@ -128,11 +144,15 @@ function resolveUpdateResult<T>(
   result:
     | { status: 'UPDATED'; user: T }
     | { status: 'NOT_FOUND' }
-    | { status: 'LAST_OWNER' },
+    | { status: 'LAST_OWNER' }
+    | { status: 'EMAIL_CONFLICT' },
   previous: T,
 ): T {
   if (result.status === 'NOT_FOUND') throw new ManagedUserNotFoundError();
   if (result.status === 'LAST_OWNER') throw new LastOwnerRequiredError();
+  if (result.status === 'EMAIL_CONFLICT') {
+    throw new UserEmailAlreadyInUseError();
+  }
   return result.status === 'UPDATED' ? result.user : previous;
 }
 

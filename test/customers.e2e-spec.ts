@@ -93,10 +93,19 @@ describe('Customers HTTP contract (e2e)', () => {
   it('exposes create and archive contracts without a delete endpoint', async () => {
     await request(app.getHttpServer())
       .post('/api/v1/customers')
-      .send({ name: 'Cliente HTTP', document: '12.345.678/0001-90' })
+      .send({
+        name: 'Cliente HTTP',
+        document: '12.345.678/0001-90',
+        phone: '+55 (85) 93344-9080',
+      })
       .expect(201)
       .expect(({ body }) => {
-        expect(body).toMatchObject({ id: customerId, name: 'Cliente HTTP' });
+        expect(body).toMatchObject({
+          id: customerId,
+          name: 'Cliente HTTP',
+          document: '12345678000190',
+          phone: '5585933449080',
+        });
         expect(body).not.toHaveProperty('normalizedDocument');
         expect(body).not.toHaveProperty('organizationId');
       });
@@ -139,7 +148,12 @@ class TestCustomerRepository implements CustomerRepository {
   createCustomer(input: Parameters<CustomerRepository['createCustomer']>[0]) {
     return Promise.resolve<CustomerWriteResult>({
       status: 'SUCCESS',
-      customer: { ...customer, name: input.name, document: input.document },
+      customer: {
+        ...customer,
+        name: input.name,
+        document: input.document,
+        phone: input.phone,
+      },
     });
   }
   updateCustomer() {

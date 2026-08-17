@@ -98,6 +98,30 @@ describe('UsersService', () => {
       service.setStatus(ownerContext, owner.userId, 'INACTIVE'),
     ).rejects.toBeInstanceOf(LastOwnerRequiredError);
   });
+
+  it('normalizes e-mail and hashes a new password during updates', async () => {
+    repository.findById.mockResolvedValue(ownerUser);
+    repository.update.mockResolvedValue({
+      status: 'UPDATED',
+      user: { ...ownerUser, email: 'updated@example.test' },
+    });
+
+    await service.update(ownerContext, owner.userId, {
+      email: ' Updated@Example.Test ',
+      password: 'NewLocal!2026',
+    });
+
+    expect(passwords.hash.mock.calls).toEqual([['NewLocal!2026']]);
+    expect(repository.update.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        organizationId: owner.organizationId,
+        userId: owner.userId,
+        email: 'updated@example.test',
+        normalizedEmail: 'updated@example.test',
+        passwordHash: 'argon2-test-hash',
+      }),
+    );
+  });
 });
 
 const owner: AuthenticatedPrincipal = {

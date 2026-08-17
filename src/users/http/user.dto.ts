@@ -6,6 +6,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -68,10 +69,14 @@ export class CreateUserDto {
   @MaxLength(320)
   email!: string;
 
-  @ApiProperty({ format: 'password', minLength: 8, maxLength: 128 })
+  @ApiProperty({ format: 'password', minLength: 10, maxLength: 128 })
   @IsString()
-  @MinLength(8, { message: 'A senha deve ter pelo menos 8 caracteres.' })
+  @MinLength(10, { message: 'A senha deve ter pelo menos 10 caracteres.' })
   @MaxLength(128, { message: 'A senha deve ter no máximo 128 caracteres.' })
+  @Matches(/[A-Z]/, { message: 'A senha deve conter uma letra maiúscula.' })
+  @Matches(/[a-z]/, { message: 'A senha deve conter uma letra minúscula.' })
+  @Matches(/\d/, { message: 'A senha deve conter um número.' })
+  @Matches(/[^A-Za-z0-9\s]/, { message: 'A senha deve conter um símbolo.' })
   password!: string;
 
   @ApiProperty({ enum: userRoles })
@@ -87,6 +92,24 @@ export class UpdateUserDto {
   @MinLength(2, { message: 'O nome deve ter pelo menos 2 caracteres.' })
   @MaxLength(160, { message: 'O nome deve ter no máximo 160 caracteres.' })
   name?: string;
+
+  @ApiPropertyOptional({ format: 'email', maxLength: 320 })
+  @IsOptional()
+  @Transform(normalizeEmailInput)
+  @IsEmail({}, { message: 'Informe um e-mail válido.' })
+  @MaxLength(320)
+  email?: string;
+
+  @ApiPropertyOptional({ format: 'password', minLength: 10, maxLength: 128 })
+  @IsOptional()
+  @IsString()
+  @MinLength(10, { message: 'A senha deve ter pelo menos 10 caracteres.' })
+  @MaxLength(128, { message: 'A senha deve ter no máximo 128 caracteres.' })
+  @Matches(/[A-Z]/, { message: 'A senha deve conter uma letra maiúscula.' })
+  @Matches(/[a-z]/, { message: 'A senha deve conter uma letra minúscula.' })
+  @Matches(/\d/, { message: 'A senha deve conter um número.' })
+  @Matches(/[^A-Za-z0-9\s]/, { message: 'A senha deve conter um símbolo.' })
+  password?: string;
 
   @ApiPropertyOptional({ enum: userRoles })
   @IsOptional()

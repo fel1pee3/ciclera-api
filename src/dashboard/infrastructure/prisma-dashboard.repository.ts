@@ -25,6 +25,14 @@ interface BlockerRow {
   count: bigint;
 }
 
+interface SetupRow {
+  activeUserCount: bigint;
+  customerCount: bigint;
+  locationCount: bigint;
+  equipmentCount: bigint;
+  workOrderCount: bigint;
+}
+
 @Injectable()
 export class PrismaDashboardRepository implements DashboardRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -40,7 +48,7 @@ export class PrismaDashboardRepository implements DashboardRepository {
       organization.timezone,
     );
     const now = new Date();
-    const [stageRows, reviewWait, oldestBlocked, blockerRows] =
+    const [stageRows, reviewWait, oldestBlocked, blockerRows, setupRows] =
       await this.prisma.$transaction([
         this.prisma.$queryRaw<StageRow[]>(Prisma.sql`
           SELECT status,
@@ -102,6 +110,23 @@ export class PrismaDashboardRepository implements DashboardRepository {
           ORDER BY count DESC, reason ASC
           LIMIT 5
         `),
+        this.prisma.$queryRaw<SetupRow[]>(Prisma.sql`
+          SELECT
+            (SELECT COUNT(*)::bigint FROM users
+             WHERE organization_id = ${input.organizationId}::uuid
+               AND status = 'ACTIVE') AS "activeUserCount",
+            (SELECT COUNT(*)::bigint FROM customers
+             WHERE organization_id = ${input.organizationId}::uuid
+               AND archived_at IS NULL) AS "customerCount",
+            (SELECT COUNT(*)::bigint FROM service_locations
+             WHERE organization_id = ${input.organizationId}::uuid
+               AND status = 'ACTIVE') AS "locationCount",
+            (SELECT COUNT(*)::bigint FROM equipment
+             WHERE organization_id = ${input.organizationId}::uuid
+               AND archived_at IS NULL) AS "equipmentCount",
+            (SELECT COUNT(*)::bigint FROM work_orders
+             WHERE organization_id = ${input.organizationId}::uuid) AS "workOrderCount"
+        `),
       ]);
 
     const empty = () => ({ count: 0, amountInCents: 0n });
@@ -121,6 +146,7 @@ export class PrismaDashboardRepository implements DashboardRepository {
       }
     }
     const average = reviewWait[0]?.averageSeconds;
+    const setup = setupRows[0];
     const averageReviewWaitingSeconds =
       average === null || average === undefined
         ? null
@@ -128,6 +154,13 @@ export class PrismaDashboardRepository implements DashboardRepository {
     return {
       timezone: organization.timezone,
       period: { from: input.from, to: input.to },
+      setup: {
+        activeUserCount: Number(setup?.activeUserCount ?? 0n),
+        customerCount: Number(setup?.customerCount ?? 0n),
+        locationCount: Number(setup?.locationCount ?? 0n),
+        equipmentCount: Number(setup?.equipmentCount ?? 0n),
+        workOrderCount: Number(setup?.workOrderCount ?? 0n),
+      },
       stages,
       blockedAmountInCents: stages.PENDING_CORRECTION.amountInCents,
       averageReviewWaitingSeconds,

@@ -16,6 +16,13 @@ export type DashboardStatus = (typeof dashboardStatuses)[number];
 export interface DashboardSummary {
   timezone: string;
   period: { from: string; to: string };
+  setup: {
+    activeUserCount: number;
+    customerCount: number;
+    locationCount: number;
+    equipmentCount: number;
+    workOrderCount: number;
+  };
   stages: Record<DashboardStatus, { count: number; amountInCents: bigint }>;
   blockedAmountInCents: bigint;
   averageReviewWaitingSeconds: number | null;

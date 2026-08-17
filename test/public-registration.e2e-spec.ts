@@ -18,7 +18,6 @@ const validInput = {
   ownerName: 'Maria Owner',
   email: 'registration-e2e@example.test',
   password: 'LocalOnly!2026',
-  timezone: 'America/Sao_Paulo',
   termsAccepted: true,
   termsVersion: '2026-08-17',
 };
@@ -121,7 +120,11 @@ describe('Public registration contract (e2e)', () => {
 
   it.each([
     ['short password', { password: 'short' }],
-    ['invalid timezone', { timezone: 'Mars/Olympus' }],
+    ['password without uppercase', { password: 'localonly!2026' }],
+    ['password without lowercase', { password: 'LOCALONLY!2026' }],
+    ['password without number', { password: 'LocalOnly!Password' }],
+    ['password without symbol', { password: 'LocalOnly2026' }],
+    ['client-defined timezone', { timezone: 'America/Manaus' }],
     ['missing legal version', { termsVersion: undefined }],
   ])('rejects %s', async (_scenario, override) => {
     const response = await register(enabledApp, {

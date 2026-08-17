@@ -117,6 +117,17 @@ describe('Users HTTP contract (e2e)', () => {
   });
 
   it('validates unknown fields and never returns a password or hash', async () => {
+    const weakPassword = await request(app.getHttpServer())
+      .post('/api/v1/users')
+      .send({
+        name: 'Técnica HTTP',
+        email: 'http-tech@example.test',
+        password: 'weakpassword',
+        role: 'TECHNICIAN',
+      })
+      .expect(422);
+    expect(weakPassword.body).toMatchObject({ code: 'VALIDATION_ERROR' });
+
     const invalid = await request(app.getHttpServer())
       .post('/api/v1/users')
       .send({
@@ -146,6 +157,15 @@ describe('Users HTTP contract (e2e)', () => {
     });
     expect(JSON.stringify(created.body)).not.toContain('password');
     expect(JSON.stringify(created.body)).not.toContain('hash');
+  });
+
+  it('rejects a weak password when updating access data', async () => {
+    const response = await request(app.getHttpServer())
+      .patch('/api/v1/users/40000000-0000-4000-8000-000000000001')
+      .send({ password: 'weakpassword' })
+      .expect(422);
+
+    expect(response.body).toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 });
 

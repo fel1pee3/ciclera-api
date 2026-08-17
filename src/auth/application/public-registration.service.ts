@@ -21,13 +21,13 @@ import type {
 import { PublicRegistrationEmailConflictError } from '../domain/public-registration.errors';
 
 export const currentLegalVersion = '2026-08-17';
+export const defaultOrganizationTimezone = 'America/Sao_Paulo';
 
 export interface PublicRegistrationInput {
   organizationName: string;
   ownerName: string;
   email: string;
   password: string;
-  timezone: string;
   termsVersion: string;
   requestId: string;
 }
@@ -77,7 +77,7 @@ export class PublicRegistrationService {
       email,
       normalizedEmail: email,
       passwordHash,
-      timezone: input.timezone,
+      timezone: defaultOrganizationTimezone,
       termsVersion: input.termsVersion,
       privacyVersion: currentLegalVersion,
       acceptedAt: now,

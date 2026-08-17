@@ -6,7 +6,7 @@ import {
 } from '@prisma/client';
 import { argon2id, hash } from 'argon2';
 
-type SeedEnvironment = 'development' | 'test';
+type SeedEnvironment = 'test';
 
 interface SeedUserDefinition {
   id: string;
@@ -170,7 +170,7 @@ async function main(): Promise<void> {
   try {
     await seedDatabase(prisma);
     console.log(
-      `Local ${configuration.environment} seed completed with 2 organizations and 6 users.`,
+      `Isolated ${configuration.environment} seed completed with 2 organizations and 6 users.`,
     );
   } finally {
     await prisma.$disconnect();
@@ -185,11 +185,8 @@ function resolveSeedConfiguration(environment: NodeJS.ProcessEnv): {
     throw new Error('Database seed is disabled in production.');
   }
 
-  if (
-    environment.NODE_ENV !== 'development' &&
-    environment.NODE_ENV !== 'test'
-  ) {
-    throw new Error('Database seed requires NODE_ENV=development or test.');
+  if (environment.NODE_ENV !== 'test') {
+    throw new Error('Database seed is reserved for isolated tests.');
   }
 
   const developmentUrlValue = environment.DATABASE_URL;
@@ -204,10 +201,8 @@ function resolveSeedConfiguration(environment: NodeJS.ProcessEnv): {
   const developmentDatabase = databaseNameFrom(developmentUrl);
   const testDatabase = databaseNameFrom(testUrl);
 
-  if (developmentDatabase === testDatabase) {
-    throw new Error(
-      'Development and test databases must have different names.',
-    );
+  if (developmentDatabase !== testDatabase) {
+    throw new Error('Test seed must use the configured local database.');
   }
 
   if (
@@ -217,17 +212,20 @@ function resolveSeedConfiguration(environment: NodeJS.ProcessEnv): {
     throw new Error('DATABASE_URL must point to POSTGRES_DB.');
   }
 
-  if (
-    environment.POSTGRES_TEST_DB &&
-    testDatabase !== environment.POSTGRES_TEST_DB
-  ) {
-    throw new Error('TEST_DATABASE_URL must point to POSTGRES_TEST_DB.');
+  const developmentSchema = developmentUrl.searchParams.get('schema');
+  const testSchema = testUrl.searchParams.get('schema');
+
+  if (developmentSchema && developmentSchema !== 'public') {
+    throw new Error('DATABASE_URL must use the public schema.');
+  }
+
+  if (!testSchema || !/^ciclera_test_[a-z0-9_]+$/.test(testSchema)) {
+    throw new Error('TEST_DATABASE_URL must use an isolated test schema.');
   }
 
   return {
     environment: environment.NODE_ENV,
-    databaseUrl:
-      environment.NODE_ENV === 'test' ? testUrlValue : developmentUrlValue,
+    databaseUrl: testUrlValue,
   };
 }
 

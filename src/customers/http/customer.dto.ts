@@ -9,6 +9,7 @@ import {
   Length,
   Max,
   MaxLength,
+  Matches,
   Min,
   MinLength,
 } from 'class-validator';
@@ -19,6 +20,13 @@ const locationStatuses = ['ACTIVE', 'INACTIVE'] as const;
 
 function trim({ value }: { value: unknown }): unknown {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value;
+}
+
+function digits({ value }: { value: unknown }): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value !== 'string') return value;
+  const normalized = value.replace(/\D/g, '');
+  return normalized || null;
 }
 
 class PaginationQueryDto {
@@ -57,11 +65,17 @@ export class CustomerInputDto {
   @MaxLength(160)
   name!: string;
 
-  @ApiPropertyOptional({ nullable: true, maxLength: 32 })
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'CPF ou CNPJ armazenado somente com dígitos.',
+    example: '12345678000190',
+  })
   @IsOptional()
-  @Transform(trim)
+  @Transform(digits)
   @IsString()
-  @MaxLength(32)
+  @Matches(/^(?:\d{11}|\d{14})$/, {
+    message: 'Informe um CPF com 11 ou CNPJ com 14 dígitos.',
+  })
   document?: string | null;
 
   @ApiPropertyOptional({ nullable: true, format: 'email', maxLength: 320 })
@@ -71,11 +85,17 @@ export class CustomerInputDto {
   @MaxLength(320)
   email?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, maxLength: 32 })
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Telefone brasileiro com país, DDD e número, somente dígitos.',
+    example: '5585933449080',
+  })
   @IsOptional()
-  @Transform(trim)
+  @Transform(digits)
   @IsString()
-  @MaxLength(32)
+  @Matches(/^55\d{10,11}$/, {
+    message: 'Informe o país 55, DDD e telefone completos.',
+  })
   phone?: string | null;
 
   @ApiPropertyOptional({ nullable: true, maxLength: 2000 })

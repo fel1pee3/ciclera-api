@@ -30,7 +30,8 @@ export type CreateUserResult =
 export type UpdateUserResult =
   | { status: 'UPDATED'; user: ManagedUser }
   | { status: 'NOT_FOUND' }
-  | { status: 'LAST_OWNER' };
+  | { status: 'LAST_OWNER' }
+  | { status: 'EMAIL_CONFLICT' };
 
 export interface UserRepository {
   list(input: ListUsersInput): Promise<PaginatedUsers>;
@@ -50,6 +51,9 @@ export interface UserRepository {
       organizationId: string;
       userId: string;
       name?: string;
+      email?: string;
+      normalizedEmail?: string;
+      passwordHash?: string;
       role?: UserRole;
     } & AuditContext,
   ): Promise<UpdateUserResult>;

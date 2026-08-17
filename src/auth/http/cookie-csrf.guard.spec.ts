@@ -5,8 +5,9 @@ import { CookieCsrfGuard } from './cookie-csrf.guard';
 const environment = {
   NODE_ENV: 'test',
   PORT: 3333,
-  DATABASE_URL: 'postgresql://local:local@localhost:55432/ciclera_dev',
-  TEST_DATABASE_URL: 'postgresql://local:local@localhost:55432/ciclera_test',
+  DATABASE_URL: 'postgresql://local:local@localhost:55432/ciclera',
+  TEST_DATABASE_URL:
+    'postgresql://local:local@localhost:55432/ciclera?schema=ciclera_test_unit',
   WEB_URL: 'http://localhost:3000',
   CORS_ORIGINS: ['http://localhost:3000'],
   HTTP_BODY_LIMIT: '100kb',

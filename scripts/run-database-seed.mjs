@@ -2,11 +2,10 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
-const allowedTargets = new Set(['development', 'test']);
 const target = process.argv[2];
 
-if (!target || !allowedTargets.has(target)) {
-  throw new Error('Seed target must be either "development" or "test".');
+if (target !== 'test') {
+  throw new Error('Seed is reserved for isolated automated tests.');
 }
 
 if (process.env.NODE_ENV === 'production') {
@@ -23,7 +22,7 @@ const result = spawnSync(
     cwd: projectRoot,
     env: {
       ...process.env,
-      NODE_ENV: target,
+      NODE_ENV: 'test',
     },
     stdio: 'inherit',
   },

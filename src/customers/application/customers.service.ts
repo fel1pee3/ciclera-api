@@ -9,6 +9,7 @@ import {
   ServiceLocationNotFoundError,
 } from '../domain/customer.errors';
 import {
+  digitsOnly,
   displayText,
   normalizedDocument,
   normalizedText,
@@ -85,7 +86,7 @@ export class CustomersService {
 
   async createCustomer(context: RequestContext, input: CustomerInput) {
     this.requireManager(context.principal);
-    const document = optionalText(input.document);
+    const document = digitsOnly(input.document);
     const result = await this.customers.createCustomer({
       ...mutationContext(context),
       name: displayText(input.name),
@@ -93,7 +94,7 @@ export class CustomersService {
       document,
       normalizedDocument: normalizedDocument(document),
       email: optionalText(input.email)?.toLowerCase() ?? null,
-      phone: optionalText(input.phone),
+      phone: digitsOnly(input.phone),
       notes: optionalText(input.notes),
     });
     return resolveCustomer(result);
@@ -106,7 +107,7 @@ export class CustomersService {
   ) {
     this.requireManager(context.principal);
     const document =
-      input.document === undefined ? undefined : optionalText(input.document);
+      input.document === undefined ? undefined : digitsOnly(input.document);
     const result = await this.customers.updateCustomer({
       ...mutationContext(context),
       customerId,
@@ -122,9 +123,7 @@ export class CustomersService {
       ...(input.email === undefined
         ? {}
         : { email: optionalText(input.email)?.toLowerCase() ?? null }),
-      ...(input.phone === undefined
-        ? {}
-        : { phone: optionalText(input.phone) }),
+      ...(input.phone === undefined ? {} : { phone: digitsOnly(input.phone) }),
       ...(input.notes === undefined
         ? {}
         : { notes: optionalText(input.notes) }),

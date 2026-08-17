@@ -67,6 +67,7 @@ describe('Customers and service locations persistence', () => {
         name: '  Clínica   São José  ',
         document: '12.345.678/0001-90',
         email: 'CONTATO@EXAMPLE.TEST',
+        phone: '+55 (85) 93344-9080',
       },
     );
     await customers.createCustomer(context(ownerA, 'req_customer_2'), {
@@ -91,7 +92,9 @@ describe('Customers and service locations persistence', () => {
       where: { id: created.id },
     });
     expect(stored.normalizedName).toBe('clinica sao jose');
+    expect(stored.document).toBe('12345678000190');
     expect(stored.normalizedDocument).toBe('12345678000190');
+    expect(stored.phone).toBe('5585933449080');
   });
 
   it('never reveals or mutates a customer from another tenant', async () => {

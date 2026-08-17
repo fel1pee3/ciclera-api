@@ -8,6 +8,7 @@ import type {
 import { PublicRegistrationEmailConflictError } from '../domain/public-registration.errors';
 import {
   currentLegalVersion,
+  defaultOrganizationTimezone,
   PublicRegistrationService,
 } from './public-registration.service';
 
@@ -74,7 +75,6 @@ describe('PublicRegistrationService', () => {
         ownerName: ' Maria   Owner ',
         email: '  MARIA@EXAMPLE.TEST ',
         password: 'LocalOnly!2026',
-        timezone: 'America/Sao_Paulo',
         termsVersion: currentLegalVersion,
         requestId: 'req_registration_unit',
       }),
@@ -91,6 +91,7 @@ describe('PublicRegistrationService', () => {
         email: 'maria@example.test',
         normalizedEmail: 'maria@example.test',
         passwordHash: 'argon2-hash',
+        timezone: defaultOrganizationTimezone,
         termsVersion: currentLegalVersion,
         privacyVersion: currentLegalVersion,
       }),
@@ -109,7 +110,6 @@ describe('PublicRegistrationService', () => {
         ownerName: 'Maria Owner',
         email: 'maria@example.test',
         password: 'LocalOnly!2026',
-        timezone: 'America/Sao_Paulo',
         termsVersion: currentLegalVersion,
         requestId: 'req_registration_conflict',
       }),

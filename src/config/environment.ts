@@ -115,6 +115,14 @@ export function validateEnvironment(
     issues.push('TEST_DATABASE_URL: is required in test');
   }
 
+  if (data.NODE_ENV === 'test' && data.TEST_DATABASE_URL) {
+    validateTestDatabaseIsolation(
+      data.DATABASE_URL,
+      data.TEST_DATABASE_URL,
+      issues,
+    );
+  }
+
   const webUrl = normalizeWebUrl(data.WEB_URL ?? localWebOrigin, issues);
   const corsOrigins = parseCorsOrigins(data.CORS_ORIGINS ?? webUrl, issues);
   const passwordResetDeliveryMode =
@@ -240,6 +248,35 @@ function isPostgresUrl(value: string): boolean {
     );
   } catch {
     return false;
+  }
+}
+
+function validateTestDatabaseIsolation(
+  databaseUrlValue: string,
+  testDatabaseUrlValue: string,
+  issues: string[],
+): void {
+  const databaseUrl = new URL(databaseUrlValue);
+  const testDatabaseUrl = new URL(testDatabaseUrlValue);
+  const databaseSchema = databaseUrl.searchParams.get('schema');
+  const testSchema = testDatabaseUrl.searchParams.get('schema');
+  const sameConnection =
+    databaseUrl.protocol === testDatabaseUrl.protocol &&
+    databaseUrl.hostname === testDatabaseUrl.hostname &&
+    databaseUrl.port === testDatabaseUrl.port &&
+    databaseUrl.username === testDatabaseUrl.username &&
+    databaseUrl.pathname === testDatabaseUrl.pathname;
+
+  if (databaseSchema && databaseSchema !== 'public') {
+    issues.push('DATABASE_URL: must use the public schema');
+  }
+
+  if (!sameConnection) {
+    issues.push('TEST_DATABASE_URL: must use the configured local database');
+  }
+
+  if (!testSchema || !/^ciclera_test_[a-z0-9_]+$/.test(testSchema)) {
+    issues.push('TEST_DATABASE_URL: must use an isolated test schema');
   }
 }
 
