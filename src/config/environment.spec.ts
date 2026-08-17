@@ -31,8 +31,24 @@ describe('validateEnvironment', () => {
     expect(environment.REFRESH_TOKEN_TTL).toBe(2_592_000);
     expect(environment.PASSWORD_RESET_TOKEN_TTL).toBe(1_800);
     expect(environment.PASSWORD_RESET_DELIVERY_MODE).toBe('local');
+    expect(environment.PUBLIC_REGISTRATION_ENABLED).toBe(false);
     expect(environment.EVIDENCE_STORAGE_DRIVER).toBe('local');
     expect(environment.RATE_LIMIT_STORAGE_DRIVER).toBe('memory');
+  });
+
+  it('only enables public registration through an explicit typed flag', () => {
+    expect(
+      validateEnvironment({
+        ...validEnvironment,
+        PUBLIC_REGISTRATION_ENABLED: 'true',
+      }).PUBLIC_REGISTRATION_ENABLED,
+    ).toBe(true);
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        PUBLIC_REGISTRATION_ENABLED: 'yes',
+      }),
+    ).toThrow(/PUBLIC_REGISTRATION_ENABLED/);
   });
 
   it('prevents bootstrap when required configuration is missing', () => {

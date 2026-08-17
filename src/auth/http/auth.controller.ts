@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -14,16 +15,20 @@ import {
   ApiCookieAuth,
   ApiAcceptedResponse,
   ApiBadRequestResponse,
+  ApiConflictResponse,
+  ApiCreatedResponse,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
+  ApiServiceUnavailableResponse,
 } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AuthService } from '../application/auth.service';
 import { PasswordResetService } from '../application/password-reset.service';
+import { PublicRegistrationService } from '../application/public-registration.service';
 import type { AuthenticatedPrincipal } from '../domain/authenticated-principal';
 import { AllowedOriginGuard } from './allowed-origin.guard';
 import {
@@ -41,15 +46,61 @@ import {
   ResetPasswordRequestDto,
 } from './password-reset.dto';
 import { Public } from './public.decorator';
+import { PublicRegistrationRequestDto } from './public-registration.dto';
+import {
+  PublicRegistrationEnabledGuard,
+  PublicRegistrationRequestGuard,
+} from './public-registration.guard';
+import type { RequestWithId } from '../../http/request-id';
+import { getRequestId } from '../../http/request-id';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
+    private readonly registrations: PublicRegistrationService,
     private readonly passwordResets: PasswordResetService,
     private readonly cookies: AuthCookieService,
   ) {}
+
+  @Post('register')
+  @Public()
+  @UseGuards(
+    PublicRegistrationEnabledGuard,
+    AllowedOriginGuard,
+    PublicRegistrationRequestGuard,
+    ThrottlerGuard,
+  )
+  @Throttle({
+    ip: { limit: 20, ttl: 60_000 },
+    identifier: { limit: 5, ttl: 60_000 },
+  })
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({
+    summary: 'Cria uma organiza\u00e7\u00e3o e seu primeiro OWNER.',
+  })
+  @ApiCreatedResponse({ type: AuthenticatedAccountResponseDto })
+  @ApiBadRequestResponse({ description: 'Corpo inv\u00e1lido.' })
+  @ApiConflictResponse({ description: 'E-mail j\u00e1 cadastrado.' })
+  @ApiServiceUnavailableResponse({ description: 'Cadastro desabilitado.' })
+  async register(
+    @Body() input: PublicRegistrationRequestDto,
+    @Req() request: RequestWithId,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthenticatedAccountResponseDto> {
+    const authentication = await this.registrations.register({
+      organizationName: input.organizationName,
+      ownerName: input.ownerName,
+      email: input.email,
+      password: input.password,
+      timezone: input.timezone,
+      termsVersion: input.termsVersion,
+      requestId: getRequestId(request),
+    });
+    this.cookies.write(response, authentication);
+    return authentication.account;
+  }
 
   @Post('forgot-password')
   @Public()

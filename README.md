@@ -260,6 +260,7 @@ As variáveis da fundação HTTP, da infraestrutura PostgreSQL, do Prisma, da au
 | `CORS_ORIGINS` | Em produção | Origens HTTP(S) explícitas, separadas por vírgula; usa `WEB_URL` localmente quando omitida |
 | `HTTP_BODY_LIMIT` | Não | Limite dos corpos JSON e URL-encoded; padrão `100kb` |
 | `LOG_LEVEL` | Não | `debug`, `info`, `warn` ou `error`; padrão `info` |
+| `PUBLIC_REGISTRATION_ENABLED` | Não | Habilita explicitamente o cadastro público; padrão seguro `false` |
 
 ### Autenticação
 
@@ -337,6 +338,7 @@ WEB_URL=http://localhost:3000
 CORS_ORIGINS=http://localhost:3000
 HTTP_BODY_LIMIT=100kb
 LOG_LEVEL=info
+PUBLIC_REGISTRATION_ENABLED=true
 
 JWT_ACCESS_SECRET=replace-with-at-least-32-characters-local-only
 JWT_ACCESS_ISSUER=ciclera-api-local
@@ -588,11 +590,18 @@ Regras:
 
 ## Autenticação
 
-O MVP não possui cadastro público livre. Organizações e primeiros usuários devem ser criados por fluxo administrativo controlado, convite ou bootstrap documentado.
+O cadastro público self-service está disponível em
+`POST /api/v1/auth/register` quando `PUBLIC_REGISTRATION_ENABLED=true`. A rota
+cria atomicamente a organização ativa, seu primeiro `OWNER`, as configurações
+mínimas, o aceite legal, a sessão e a auditoria. Em produção a flag ausente ou
+`false` mantém o recurso indisponível; ele não deve ser habilitado antes da
+implementação de verificação de e-mail.
 
 ### Fluxos mínimos
 
 - Login com e-mail e senha.
+- Cadastro público de uma organização e seu primeiro `OWNER`, controlado por
+  feature flag.
 - Consulta da sessão atual.
 - Renovação de sessão.
 - Logout da sessão atual.
@@ -675,8 +684,9 @@ de autorização:
 - `AuthenticationGuard` depende de portas para resolver uma sessão válida e
   consultar novamente o usuário dentro da organização da sessão.
 - Os guards de autenticação e perfis são globais e fail-closed; rotas públicas
-  precisam do decorator explícito `Public`, limitado aos health checks, login,
-  refresh, logout idempotente, recuperação de senha e código exclusivo de testes.
+  precisam do decorator explícito `Public`, limitado aos health checks, cadastro
+  controlado por flag, login, refresh, logout idempotente, recuperação de senha e
+  código exclusivo de testes.
 - Usuário inexistente ou inativo e organização inativa recebem o mesmo erro
   genérico `401`, sem revelar identidade, tenant ou status da conta.
 - `CurrentPrincipal` entrega o principal tipado aos controllers protegidos.

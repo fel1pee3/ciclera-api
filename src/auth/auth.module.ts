@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './application/auth.service';
+import { PublicRegistrationService } from './application/public-registration.service';
 import { PasswordResetService } from './application/password-reset.service';
 import { AUTH_CONFIGURATION } from './application/ports/auth-configuration.port';
 import { AUTHENTICATED_USER_REPOSITORY } from './application/ports/authenticated-user.repository';
@@ -12,6 +13,7 @@ import { PASSWORD_HASHER } from './application/ports/password-hasher.port';
 import { PASSWORD_RESET_DELIVERY_OBSERVER } from './application/ports/password-reset-delivery-observer.port';
 import { PASSWORD_RESET_REPOSITORY } from './application/ports/password-reset.repository';
 import { PASSWORD_RESET_TOKEN_SERVICE } from './application/ports/password-reset-token.port';
+import { PUBLIC_REGISTRATION_REPOSITORY } from './application/ports/public-registration.repository';
 import { SESSION_REPOSITORY } from './application/ports/session.repository';
 import { SESSION_RESOLVER } from './application/ports/session-resolver.port';
 import {
@@ -24,6 +26,11 @@ import { AuthCookieService } from './http/auth-cookies';
 import { AuthenticationGuard } from './http/authentication.guard';
 import { CookieCsrfGuard } from './http/cookie-csrf.guard';
 import { RolesGuard } from './http/roles.guard';
+import {
+  PublicRegistrationEnabledGuard,
+  PublicRegistrationRequestGuard,
+  PUBLIC_REGISTRATION_CONFIGURATION,
+} from './http/public-registration.guard';
 import { Argon2PasswordHasher } from './infrastructure/argon2-password-hasher';
 import { DatabaseSessionResolver } from './infrastructure/database-session-resolver';
 import { JwtAccessTokenService } from './infrastructure/jwt-access-token.service';
@@ -31,6 +38,7 @@ import { PrismaAuthenticatedUserRepository } from './infrastructure/prisma-authe
 import { PrismaIdentityRepository } from './infrastructure/prisma-identity.repository';
 import { PrismaPasswordResetRepository } from './infrastructure/prisma-password-reset.repository';
 import { PrismaSessionRepository } from './infrastructure/prisma-session.repository';
+import { PrismaPublicRegistrationRepository } from './infrastructure/prisma-public-registration.repository';
 import { CryptoRefreshTokenService } from './infrastructure/refresh-token.service';
 import { CryptoPasswordResetTokenService } from './infrastructure/password-reset-token.service';
 import { StructuredPasswordResetDeliveryObserver } from './infrastructure/password-reset-delivery-observer';
@@ -46,9 +54,19 @@ import { readEnvironment } from '../config/environment';
   controllers: [AuthController],
   providers: [
     AuthService,
+    PublicRegistrationService,
     PasswordResetService,
     AuthCookieService,
     AllowedOriginGuard,
+    PublicRegistrationEnabledGuard,
+    PublicRegistrationRequestGuard,
+    {
+      provide: PUBLIC_REGISTRATION_CONFIGURATION,
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        enabled: readEnvironment(configService).PUBLIC_REGISTRATION_ENABLED,
+      }),
+    },
     {
       provide: AUTH_CONFIGURATION,
       inject: [ConfigService],
@@ -112,6 +130,10 @@ import { readEnvironment } from '../config/environment';
           ? new LocalPasswordResetEmailGateway(configService)
           : new DisabledPasswordResetEmailGateway();
       },
+    },
+    {
+      provide: PUBLIC_REGISTRATION_REPOSITORY,
+      useClass: PrismaPublicRegistrationRepository,
     },
     {
       provide: SESSION_REPOSITORY,

@@ -10,6 +10,10 @@ import { StructuredLoggerService } from '../observability/structured-logger.serv
 import { getRequestId, RequestWithId } from './request-id';
 import { AuthenticationRejectedError } from '../auth/domain/authentication-rejected.error';
 import {
+  PublicRegistrationDisabledError,
+  PublicRegistrationEmailConflictError,
+} from '../auth/domain/public-registration.errors';
+import {
   InvalidPasswordResetTokenError,
   PasswordResetDeliveryUnavailableError,
 } from '../auth/domain/password-reset.errors';
@@ -129,6 +133,25 @@ function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
       title: 'Falha na autenticação',
       detail: 'E-mail, senha ou sessão inválidos.',
       code: 'INVALID_CREDENTIALS',
+    };
+  }
+
+  if (exception instanceof PublicRegistrationDisabledError) {
+    return {
+      type: 'https://ciclera.com.br/problems/public-registration-disabled',
+      title: 'Cadastro indispon\u00edvel',
+      detail:
+        'A cria\u00e7\u00e3o de novas contas est\u00e1 temporariamente indispon\u00edvel.',
+      code: 'PUBLIC_REGISTRATION_DISABLED',
+    };
+  }
+
+  if (exception instanceof PublicRegistrationEmailConflictError) {
+    return {
+      type: 'https://ciclera.com.br/problems/registration-email-conflict',
+      title: 'E-mail indispon\u00edvel',
+      detail: 'N\u00e3o foi poss\u00edvel criar uma conta com este e-mail.',
+      code: 'REGISTRATION_EMAIL_CONFLICT',
     };
   }
 
@@ -537,6 +560,13 @@ function getProblemDefaults(status: number): ProblemDefaults {
       detail: 'O corpo da requisição excede o limite permitido.',
       code: 'PAYLOAD_TOO_LARGE',
     },
+    [HttpStatus.UNSUPPORTED_MEDIA_TYPE]: {
+      slug: 'unsupported-media-type',
+      title: 'Formato n\u00e3o suportado',
+      detail:
+        'O formato do corpo da requisi\u00e7\u00e3o n\u00e3o \u00e9 suportado.',
+      code: 'UNSUPPORTED_MEDIA_TYPE',
+    },
     [HttpStatus.UNPROCESSABLE_ENTITY]: {
       slug: 'validation-error',
       title: 'Dados inválidos',
@@ -570,6 +600,14 @@ function getProblemDefaults(status: number): ProblemDefaults {
 function getHttpStatus(exception: unknown): number {
   if (exception instanceof AuthenticationRejectedError) {
     return HttpStatus.UNAUTHORIZED;
+  }
+
+  if (exception instanceof PublicRegistrationDisabledError) {
+    return HttpStatus.SERVICE_UNAVAILABLE;
+  }
+
+  if (exception instanceof PublicRegistrationEmailConflictError) {
+    return HttpStatus.CONFLICT;
   }
 
   if (exception instanceof InvalidPasswordResetTokenError) {

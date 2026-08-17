@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
+import { json } from 'express';
 import { EnvironmentVariables, readEnvironment } from './config/environment';
 import { AllExceptionsFilter } from './http/all-exceptions.filter';
 import { requestIdMiddleware } from './http/request-id';
@@ -10,6 +11,7 @@ import { createRequestLoggingMiddleware } from './http/request-logging.middlewar
 import { createValidationPipe } from './http/validation.pipe';
 import { StructuredLoggerService } from './observability/structured-logger.service';
 import { accessCookieName } from './auth/http/auth-cookies';
+import { publicRegistrationBodyLimitBytes } from './auth/http/public-registration.guard';
 
 export const apiPrefix = 'api/v1';
 
@@ -39,6 +41,10 @@ export function configureApplication(
       callback(null, isAllowed);
     },
   });
+  app.use(
+    `/${apiPrefix}/auth/register`,
+    json({ limit: publicRegistrationBodyLimitBytes, type: 'application/json' }),
+  );
   app.useBodyParser('json', { limit: environment.HTTP_BODY_LIMIT });
   app.useBodyParser('urlencoded', {
     extended: true,

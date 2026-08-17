@@ -35,6 +35,7 @@ const rawEnvironmentSchema = z.object({
     .max(24 * 60 * 60)
     .default(1_800),
   PASSWORD_RESET_DELIVERY_MODE: z.enum(['local', 'disabled']).optional(),
+  PUBLIC_REGISTRATION_ENABLED: z.enum(['true', 'false']).default('false'),
   EVIDENCE_STORAGE_DRIVER: z.literal('local').default('local'),
   EVIDENCE_STORAGE_ROOT: z.string().min(1).default('.local/evidence'),
   UPLOAD_MAX_FILE_SIZE_BYTES: z.coerce
@@ -76,6 +77,7 @@ export interface EnvironmentVariables {
   REFRESH_TOKEN_TTL: number;
   PASSWORD_RESET_TOKEN_TTL: number;
   PASSWORD_RESET_DELIVERY_MODE: 'local' | 'disabled';
+  PUBLIC_REGISTRATION_ENABLED: boolean;
   EVIDENCE_STORAGE_DRIVER: 'local';
   EVIDENCE_STORAGE_ROOT: string;
   UPLOAD_MAX_FILE_SIZE_BYTES: number;
@@ -152,6 +154,7 @@ export function validateEnvironment(
     REFRESH_TOKEN_TTL: data.REFRESH_TOKEN_TTL,
     PASSWORD_RESET_TOKEN_TTL: data.PASSWORD_RESET_TOKEN_TTL,
     PASSWORD_RESET_DELIVERY_MODE: passwordResetDeliveryMode,
+    PUBLIC_REGISTRATION_ENABLED: data.PUBLIC_REGISTRATION_ENABLED === 'true',
     EVIDENCE_STORAGE_DRIVER: data.EVIDENCE_STORAGE_DRIVER,
     EVIDENCE_STORAGE_ROOT: data.EVIDENCE_STORAGE_ROOT,
     UPLOAD_MAX_FILE_SIZE_BYTES: data.UPLOAD_MAX_FILE_SIZE_BYTES,
@@ -189,6 +192,9 @@ export function readEnvironment(
     PASSWORD_RESET_DELIVERY_MODE: configService.getOrThrow<
       'local' | 'disabled'
     >('PASSWORD_RESET_DELIVERY_MODE'),
+    PUBLIC_REGISTRATION_ENABLED: configService.getOrThrow<boolean>(
+      'PUBLIC_REGISTRATION_ENABLED',
+    ),
     EVIDENCE_STORAGE_DRIVER: configService.getOrThrow<'local'>(
       'EVIDENCE_STORAGE_DRIVER',
     ),
