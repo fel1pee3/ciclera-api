@@ -34,6 +34,7 @@ export class ReviewEvidenceController {
 
   @Get(':evidenceId/content')
   @Header('Cache-Control', 'private, no-store')
+  @Header('Cross-Origin-Resource-Policy', 'cross-origin')
   async read(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Param('evidenceId', new ParseUUIDPipe()) evidenceId: string,

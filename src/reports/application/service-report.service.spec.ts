@@ -36,6 +36,13 @@ describe('ServiceReportService', () => {
     expect(result.content.subarray(0, 4).toString()).toBe('%PDF');
     const document = await PDFDocument.load(result.content);
     expect(document.getPageCount()).toBeGreaterThan(1);
+    expect(document.getTitle()).toBe('OS-000001 — Manutenção aprovada');
+    expect(document.getAuthor()).toBe('Ciclera');
+    expect(document.getSubject()).toBe('Relatório de serviço concluído');
+    for (const page of document.getPages()) {
+      expect(page.getWidth()).toBeCloseTo(595.28, 2);
+      expect(page.getHeight()).toBeCloseTo(841.89, 2);
+    }
     expect(storage.readObject.mock.calls).toContainEqual([
       'tenant/report/photo',
     ]);
