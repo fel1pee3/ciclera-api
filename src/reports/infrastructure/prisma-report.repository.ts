@@ -57,12 +57,7 @@ export class PrismaReportRepository implements ReportRepository {
           select: {
             notes: true,
             startedAt: true,
-            checklistSnapshot: true,
             technician: { select: { name: true } },
-            checklistResponses: {
-              select: { fieldId: true, value: true },
-              orderBy: { fieldId: 'asc' },
-            },
           },
         },
         additionalItems: {
@@ -98,8 +93,6 @@ export class PrismaReportRepository implements ReportRepository {
         technicianName: order.execution.technician.name,
         notes: order.execution.notes,
         startedAt: order.execution.startedAt,
-        checklistSnapshot: order.execution.checklistSnapshot,
-        checklistResponses: order.execution.checklistResponses,
       },
     };
   }

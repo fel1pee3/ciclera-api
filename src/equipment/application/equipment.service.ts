@@ -106,6 +106,16 @@ export class EquipmentService {
     );
   }
 
+  reactivate(context: RequestContext, equipmentId: string) {
+    this.requireManager(context.principal);
+    return this.resolve(
+      this.equipment.reactivate({
+        ...mutationContext(context),
+        equipmentId,
+      }),
+    );
+  }
+
   private async resolve(
     resultPromise: ReturnType<EquipmentRepository['create']>,
   ) {

@@ -74,8 +74,6 @@ export class ServiceReportService {
       formatDate(data.actualEndAt, data.organization.timezone),
     );
     layout.field('Observações', data.execution.notes ?? 'Sem observações.');
-    layout.section('Checklist');
-    for (const answer of checklistLines(data)) layout.text(answer);
     layout.section('Itens e valores');
     for (const item of data.additionalItems) {
       layout.text(
@@ -219,41 +217,6 @@ function wrap(value: string, maximum: number): string[] {
     lines.push(line);
     return lines;
   });
-}
-
-function checklistLines(data: ServiceReportData): string[] {
-  const snapshot = data.execution.checklistSnapshot;
-  if (!isRecord(snapshot) || !Array.isArray(snapshot.fields))
-    return ['Checklist não utilizado.'];
-  const answers = new Map(
-    data.execution.checklistResponses.map((item) => [item.fieldId, item.value]),
-  );
-  return snapshot.fields.flatMap((field: unknown) => {
-    if (
-      !isRecord(field) ||
-      typeof field.id !== 'string' ||
-      typeof field.label !== 'string'
-    )
-      return [];
-    const value = answers.get(field.id);
-    return [`${field.label}: ${displayChecklistValue(value)}`];
-  });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function displayChecklistValue(value: unknown): string {
-  if (value === undefined) return 'Não respondido';
-  if (
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return String(value);
-  }
-  return 'Resposta inválida';
 }
 
 function pdfSafe(value: string): string {

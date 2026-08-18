@@ -182,6 +182,36 @@ export class PrismaCustomerRepository implements CustomerRepository {
     });
   }
 
+  reactivateCustomer(
+    input: Parameters<CustomerRepository['reactivateCustomer']>[0],
+  ): Promise<CustomerWriteResult> {
+    return this.prisma.$transaction(async (transaction) => {
+      const current = await transaction.customer.findUnique({
+        where: {
+          organizationId_id: {
+            organizationId: input.organizationId,
+            id: input.customerId,
+          },
+        },
+        select: customerSelect,
+      });
+      if (!current) return { status: 'NOT_FOUND' };
+      if (!current.archivedAt) return { status: 'SUCCESS', customer: current };
+      const customer = await transaction.customer.update({
+        where: {
+          organizationId_id: {
+            organizationId: input.organizationId,
+            id: input.customerId,
+          },
+        },
+        data: { archivedAt: null },
+        select: customerSelect,
+      });
+      await writeAudit(transaction, input, customer.id, 'CUSTOMER_REACTIVATED');
+      return { status: 'SUCCESS', customer };
+    });
+  }
+
   async listLocations(
     input: Parameters<CustomerRepository['listLocations']>[0],
   ) {

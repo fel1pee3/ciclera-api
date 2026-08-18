@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AuthenticatedPrincipal } from '../../auth/domain/authenticated-principal';
 import {
-  WorkOrderExecutionIncompleteError,
   WorkOrderManagementForbiddenError,
   WorkOrderNotFoundError,
   WorkOrderStatusLockedError,
@@ -96,9 +95,6 @@ export class ReviewsService {
     }
     if (result.status === 'VERSION_CONFLICT') {
       throw new WorkOrderVersionConflictError();
-    }
-    if (result.status === 'INCOMPLETE') {
-      throw new WorkOrderExecutionIncompleteError(result.issues);
     }
     return {
       status: 'READY_TO_BILL' as const,

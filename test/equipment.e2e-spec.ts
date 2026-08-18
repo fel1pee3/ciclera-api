@@ -67,7 +67,7 @@ describe('Equipment HTTP contract (e2e)', () => {
       .expect(422);
   });
 
-  it('exposes create and archive without leaking normalized or tenant fields', async () => {
+  it('exposes create, archive, and reactivate without leaking internal fields', async () => {
     await request(app.getHttpServer())
       .post('/api/v1/equipment')
       .send(input)
@@ -80,6 +80,10 @@ describe('Equipment HTTP contract (e2e)', () => {
     await request(app.getHttpServer())
       .post(`/api/v1/equipment/${equipmentId}/archive`)
       .expect(200);
+    await request(app.getHttpServer())
+      .post(`/api/v1/equipment/${equipmentId}/reactivate`)
+      .expect(200)
+      .expect(({ body }) => expect(body).toMatchObject({ archivedAt: null }));
     await request(app.getHttpServer())
       .delete(`/api/v1/equipment/${equipmentId}`)
       .expect(404);
@@ -134,6 +138,12 @@ class TestEquipmentRepository implements EquipmentRepository {
     return Promise.resolve<EquipmentWriteResult>({
       status: 'SUCCESS',
       equipment: { ...equipmentRecord, archivedAt: now },
+    });
+  }
+  reactivate() {
+    return Promise.resolve<EquipmentWriteResult>({
+      status: 'SUCCESS',
+      equipment: equipmentRecord,
     });
   }
 }

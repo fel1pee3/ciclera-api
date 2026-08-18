@@ -72,9 +72,6 @@ describe('Additional execution items', () => {
       if (!id) continue;
       await prisma.additionalItem.deleteMany({ where: { organizationId: id } });
       await prisma.evidence.deleteMany({ where: { organizationId: id } });
-      await prisma.checklistResponse.deleteMany({
-        where: { organizationId: id },
-      });
       await prisma.workOrderExecution.deleteMany({
         where: { organizationId: id },
       });

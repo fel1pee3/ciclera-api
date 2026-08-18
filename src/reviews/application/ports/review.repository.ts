@@ -1,9 +1,4 @@
-import type {
-  ChecklistAnswer,
-  ChecklistSnapshot,
-} from '../../../checklists/domain/checklist';
 import type { WorkOrderPriority } from '../../../work-orders/domain/work-order';
-import type { ExecutionCompletionIssue } from '../../../work-orders/application/ports/technician-work-order.repository';
 import type { ReviewReason, ReviewRecord } from '../../domain/review';
 
 export const REVIEW_REPOSITORY = Symbol('REVIEW_REPOSITORY');
@@ -31,11 +26,6 @@ export interface ReviewDetails extends ReviewQueueItem {
     notes: string | null;
     startedAt: Date;
     updatedAt: Date;
-    checklist: {
-      snapshot: ChecklistSnapshot;
-      responses: ChecklistAnswer[];
-      missingRequiredFieldIds: string[];
-    } | null;
     evidence: Array<{
       id: string;
       kind: 'PHOTO' | 'SIGNATURE';
@@ -64,7 +54,6 @@ export type ReviewMutationResult =
 
 export type ReviewApprovalResult =
   | { status: 'SUCCESS' | 'ALREADY_APPROVED'; finalAmountInCents: bigint }
-  | { status: 'INCOMPLETE'; issues: ExecutionCompletionIssue[] }
   | { status: 'NOT_FOUND' }
   | { status: 'STATUS_LOCKED' }
   | { status: 'VERSION_CONFLICT' };

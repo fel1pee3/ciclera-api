@@ -2,7 +2,7 @@
 
 API da Ciclera responsável por autenticação, autorização, isolamento multi-tenant, regras de negócio, persistência, evidências, auditoria e contratos consumidos pelo `ciclera-web`.
 
-Execuções em campo podem ser enviadas para revisão somente após a validação server-side do snapshot do checklist e das evidências obrigatórias confirmadas. O envio é transacional, versionado e bloqueia novas edições enquanto a ordem aguarda revisão.
+O envio de execuções para revisão é transacional, versionado e bloqueia novas edições enquanto a ordem aguarda revisão.
 
 > **Do chamado ao caixa.**
 
@@ -130,11 +130,11 @@ com separador `;`, codificação UTF-8 e as colunas `type`, `external_key`,
 `parent_external_key`, `name`, `document`, endereço e identificação do
 equipamento. O limite é de 90 KB e 500 linhas.
 
-| Método | Rota | Finalidade |
-| --- | --- | --- |
-| `GET` | `/api/v1/imports/initial-data/template.csv` | Baixar o modelo oficial |
-| `POST` | `/api/v1/imports/initial-data/preview` | Validar o arquivo sem persistir |
-| `POST` | `/api/v1/imports/initial-data/commit` | Importar clientes, locais e equipamentos após a prévia |
+| Método | Rota                                        | Finalidade                                             |
+| ------ | ------------------------------------------- | ------------------------------------------------------ |
+| `GET`  | `/api/v1/imports/initial-data/template.csv` | Baixar o modelo oficial                                |
+| `POST` | `/api/v1/imports/initial-data/preview`      | Validar o arquivo sem persistir                        |
+| `POST` | `/api/v1/imports/initial-data/commit`       | Importar clientes, locais e equipamentos após a prévia |
 
 A confirmação exige o checksum SHA-256 devolvido pela prévia. A gravação é
 atômica, revalida conflitos dentro da transação, é isolada por organização e
@@ -197,25 +197,25 @@ docker compose up -d --wait postgres
 
 ## Scripts esperados
 
-| Comando | Responsabilidade |
-| --- | --- |
-| `npm run start:dev` | Iniciar a API com reload em desenvolvimento |
-| `npm run build` | Compilar somente `src` e validar o artefato de produção |
-| `npm run build:check` | Confirmar `dist/main.js` e rejeitar seed/testes no artefato |
-| `npm run start:prod` | Executar `dist/main.js`, o entrypoint convencional de produção |
-| `npm run lint` | Executar lint |
-| `npm run typecheck` | Validar tipos sem gerar build |
-| `npm run db:check` | Validar a conexão Node.js com o banco local |
-| `npm run db:migrate:dev` | Criar e aplicar migrations no banco local |
-| `npm run db:migrate:deploy` | Aplicar migrations já versionadas no ambiente selecionado |
-| `npm run prisma:generate` | Gerar o Prisma Client a partir do schema versionado |
-| `npm run prisma:validate` | Validar o schema Prisma sem alterar o banco |
-| `npm test` | Executar testes unitários |
-| `npm run test:integration` | Criar um schema temporário, aplicar migrations, testar e removê-lo |
-| `npm run test:watch` | Executar testes em modo interativo |
-| `npm run test:e2e` | Executar os testes HTTP end-to-end da fundação da API |
-| `npm run format` | Formatar os arquivos TypeScript |
-| `npm run format:check` | Verificar a formatação sem alterar arquivos |
+| Comando                     | Responsabilidade                                                   |
+| --------------------------- | ------------------------------------------------------------------ |
+| `npm run start:dev`         | Iniciar a API com reload em desenvolvimento                        |
+| `npm run build`             | Compilar somente `src` e validar o artefato de produção            |
+| `npm run build:check`       | Confirmar `dist/main.js` e rejeitar seed/testes no artefato        |
+| `npm run start:prod`        | Executar `dist/main.js`, o entrypoint convencional de produção     |
+| `npm run lint`              | Executar lint                                                      |
+| `npm run typecheck`         | Validar tipos sem gerar build                                      |
+| `npm run db:check`          | Validar a conexão Node.js com o banco local                        |
+| `npm run db:migrate:dev`    | Criar e aplicar migrations no banco local                          |
+| `npm run db:migrate:deploy` | Aplicar migrations já versionadas no ambiente selecionado          |
+| `npm run prisma:generate`   | Gerar o Prisma Client a partir do schema versionado                |
+| `npm run prisma:validate`   | Validar o schema Prisma sem alterar o banco                        |
+| `npm test`                  | Executar testes unitários                                          |
+| `npm run test:integration`  | Criar um schema temporário, aplicar migrations, testar e removê-lo |
+| `npm run test:watch`        | Executar testes em modo interativo                                 |
+| `npm run test:e2e`          | Executar os testes HTTP end-to-end da fundação da API              |
+| `npm run format`            | Formatar os arquivos TypeScript                                    |
+| `npm run format:check`      | Verificar a formatação sem alterar arquivos                        |
 
 Não documentar scripts inexistentes indefinidamente. Criá-los ou atualizar a tabela quando a configuração real for estabelecida.
 
@@ -243,60 +243,60 @@ As variáveis da fundação HTTP, da infraestrutura PostgreSQL, do Prisma, da au
 
 ### Aplicação e banco
 
-| Variável | Obrigatória | Finalidade |
-| --- | ---: | --- |
-| `POSTGRES_USER` | Local | Usuário exclusivamente local criado pelo container |
-| `POSTGRES_PASSWORD` | Local | Senha exclusivamente local, definida apenas no `.env` |
-| `POSTGRES_DB` | Local | Nome do único banco local persistente |
-| `POSTGRES_PORT` | Local | Porta publicada somente em loopback |
-| `NODE_ENV` | Sim | Ambiente de execução |
-| `PORT` | Não | Porta HTTP; padrão `3333` |
-| `DATABASE_URL` | Sim | Conexão com o banco local e seu schema `public` |
-| `TEST_DATABASE_URL` | Interna | Gerada temporariamente pelos executores de testes; não persiste no `.env` |
-| `DIRECT_DATABASE_URL` | Conforme infraestrutura | Conexão direta para migrations quando houver pooler |
-| `WEB_URL` | Em produção | URL principal do frontend; padrão local `http://localhost:3000` em desenvolvimento e testes |
-| `CORS_ORIGINS` | Em produção | Origens HTTP(S) explícitas, separadas por vírgula; usa `WEB_URL` localmente quando omitida |
-| `HTTP_BODY_LIMIT` | Não | Limite dos corpos JSON e URL-encoded; padrão `100kb` |
-| `LOG_LEVEL` | Não | `debug`, `info`, `warn` ou `error`; padrão `info` |
-| `PUBLIC_REGISTRATION_ENABLED` | Não | Habilita explicitamente o cadastro público; padrão seguro `false` |
+| Variável                      |             Obrigatória | Finalidade                                                                                  |
+| ----------------------------- | ----------------------: | ------------------------------------------------------------------------------------------- |
+| `POSTGRES_USER`               |                   Local | Usuário exclusivamente local criado pelo container                                          |
+| `POSTGRES_PASSWORD`           |                   Local | Senha exclusivamente local, definida apenas no `.env`                                       |
+| `POSTGRES_DB`                 |                   Local | Nome do único banco local persistente                                                       |
+| `POSTGRES_PORT`               |                   Local | Porta publicada somente em loopback                                                         |
+| `NODE_ENV`                    |                     Sim | Ambiente de execução                                                                        |
+| `PORT`                        |                     Não | Porta HTTP; padrão `3333`                                                                   |
+| `DATABASE_URL`                |                     Sim | Conexão com o banco local e seu schema `public`                                             |
+| `TEST_DATABASE_URL`           |                 Interna | Gerada temporariamente pelos executores de testes; não persiste no `.env`                   |
+| `DIRECT_DATABASE_URL`         | Conforme infraestrutura | Conexão direta para migrations quando houver pooler                                         |
+| `WEB_URL`                     |             Em produção | URL principal do frontend; padrão local `http://localhost:3000` em desenvolvimento e testes |
+| `CORS_ORIGINS`                |             Em produção | Origens HTTP(S) explícitas, separadas por vírgula; usa `WEB_URL` localmente quando omitida  |
+| `HTTP_BODY_LIMIT`             |                     Não | Limite dos corpos JSON e URL-encoded; padrão `100kb`                                        |
+| `LOG_LEVEL`                   |                     Não | `debug`, `info`, `warn` ou `error`; padrão `info`                                           |
+| `PUBLIC_REGISTRATION_ENABLED` |                     Não | Habilita explicitamente o cadastro público; padrão seguro `false`                           |
 
 ### Autenticação
 
-| Variável | Obrigatória | Finalidade |
-| --- | ---: | --- |
-| `JWT_ACCESS_SECRET` | Sim | Secret com pelo menos 32 caracteres para assinar access tokens HS256 |
-| `JWT_ACCESS_ISSUER` | Sim | Emissor exato aceito no access token |
-| `JWT_ACCESS_AUDIENCE` | Sim | Audiência exata aceita no access token |
-| `ACCESS_TOKEN_TTL` | Sim | Validade do access token em segundos, entre 60 e 3600 |
-| `REFRESH_TOKEN_TTL` | Sim | Validade da sessão renovável em segundos, entre uma hora e 90 dias |
-| `PASSWORD_RESET_TOKEN_TTL` | Não | Validade do token de redefinição em segundos, entre 5 minutos e 24 horas; padrão `1800` |
-| `PASSWORD_RESET_DELIVERY_MODE` | Não | `local` em desenvolvimento/teste ou `disabled`; produção proíbe `local` e usa `disabled` enquanto não houver provedor |
+| Variável                       | Obrigatória | Finalidade                                                                                                            |
+| ------------------------------ | ----------: | --------------------------------------------------------------------------------------------------------------------- |
+| `JWT_ACCESS_SECRET`            |         Sim | Secret com pelo menos 32 caracteres para assinar access tokens HS256                                                  |
+| `JWT_ACCESS_ISSUER`            |         Sim | Emissor exato aceito no access token                                                                                  |
+| `JWT_ACCESS_AUDIENCE`          |         Sim | Audiência exata aceita no access token                                                                                |
+| `ACCESS_TOKEN_TTL`             |         Sim | Validade do access token em segundos, entre 60 e 3600                                                                 |
+| `REFRESH_TOKEN_TTL`            |         Sim | Validade da sessão renovável em segundos, entre uma hora e 90 dias                                                    |
+| `PASSWORD_RESET_TOKEN_TTL`     |         Não | Validade do token de redefinição em segundos, entre 5 minutos e 24 horas; padrão `1800`                               |
+| `PASSWORD_RESET_DELIVERY_MODE` |         Não | `local` em desenvolvimento/teste ou `disabled`; produção proíbe `local` e usa `disabled` enquanto não houver provedor |
 
 Os cookies são host-only, `HttpOnly` e `SameSite=Strict`. `Secure` é derivado de `NODE_ENV=production`, sem uma variável que possa enfraquecê-lo acidentalmente. O access cookie usa `Path=/`; o refresh cookie usa `Path=/api/v1/auth`.
 
 ### Storage
 
-| Variável | Obrigatória | Finalidade |
-| --- | ---: | --- |
-| `STORAGE_ENDPOINT` | Conforme provedor | Endpoint do object storage |
-| `STORAGE_REGION` | Conforme provedor | Região do bucket |
-| `STORAGE_BUCKET` | Ao habilitar evidências | Bucket privado |
-| `STORAGE_ACCESS_KEY_ID` | Ao habilitar evidências | Credencial de acesso |
-| `STORAGE_SECRET_ACCESS_KEY` | Ao habilitar evidências | Credencial secreta |
-| `STORAGE_FORCE_PATH_STYLE` | Conforme provedor | Compatibilidade com storage S3-like local |
-| `UPLOAD_MAX_FILE_SIZE_BYTES` | Sim | Limite server-side por arquivo |
-| `UPLOAD_ALLOWED_MIME_TYPES` | Sim | Tipos MIME aceitos |
-| `UPLOAD_MAX_FILES_PER_EXECUTION` | Sim | Quantidade máxima de evidências por execução |
-| `EVIDENCE_URL_TTL` | Sim | Validade das capacidades temporárias de upload e leitura |
-| `EVIDENCE_STORAGE_ROOT` | Desenvolvimento | Diretório local privado do adapter de desenvolvimento |
+| Variável                         |             Obrigatória | Finalidade                                               |
+| -------------------------------- | ----------------------: | -------------------------------------------------------- |
+| `STORAGE_ENDPOINT`               |       Conforme provedor | Endpoint do object storage                               |
+| `STORAGE_REGION`                 |       Conforme provedor | Região do bucket                                         |
+| `STORAGE_BUCKET`                 | Ao habilitar evidências | Bucket privado                                           |
+| `STORAGE_ACCESS_KEY_ID`          | Ao habilitar evidências | Credencial de acesso                                     |
+| `STORAGE_SECRET_ACCESS_KEY`      | Ao habilitar evidências | Credencial secreta                                       |
+| `STORAGE_FORCE_PATH_STYLE`       |       Conforme provedor | Compatibilidade com storage S3-like local                |
+| `UPLOAD_MAX_FILE_SIZE_BYTES`     |                     Sim | Limite server-side por arquivo                           |
+| `UPLOAD_ALLOWED_MIME_TYPES`      |                     Sim | Tipos MIME aceitos                                       |
+| `UPLOAD_MAX_FILES_PER_EXECUTION` |                     Sim | Quantidade máxima de evidências por execução             |
+| `EVIDENCE_URL_TTL`               |                     Sim | Validade das capacidades temporárias de upload e leitura |
+| `EVIDENCE_STORAGE_ROOT`          |         Desenvolvimento | Diretório local privado do adapter de desenvolvimento    |
 
 ### E-mail
 
-| Variável | Obrigatória | Finalidade |
-| --- | ---: | --- |
-| `EMAIL_PROVIDER_API_KEY` | Ao habilitar e-mails | Credencial do provedor |
-| `EMAIL_FROM` | Ao habilitar e-mails | Remetente transacional |
-| `EMAIL_REPLY_TO` | Não | Endereço para respostas |
+| Variável                 |          Obrigatória | Finalidade              |
+| ------------------------ | -------------------: | ----------------------- |
+| `EMAIL_PROVIDER_API_KEY` | Ao habilitar e-mails | Credencial do provedor  |
+| `EMAIL_FROM`             | Ao habilitar e-mails | Remetente transacional  |
+| `EMAIL_REPLY_TO`         |                  Não | Endereço para respostas |
 
 O adapter `local` escreve o link de redefinição somente no terminal da API em
 `development`, sem registrar o e-mail em texto aberto. Em `test`, a entrega local
@@ -401,7 +401,6 @@ src/
 │   ├── work-orders/
 │   ├── scheduling/
 │   ├── execution/
-│   ├── checklists/
 │   ├── evidence/
 │   ├── review/
 │   ├── billing/
@@ -461,23 +460,22 @@ Módulos CRUD simples podem começar com menos camadas. Não criar entity, mappe
 
 ## Módulos do MVP
 
-| Módulo | Responsabilidade |
-| --- | --- |
-| `auth` | Login, sessão, refresh, logout e recuperação de senha |
-| `organizations` | Dados e configurações da empresa cliente |
-| `users` | Usuários, perfis, ativação e desativação |
-| `customers` | Clientes atendidos pela organização |
-| `service-locations` | Locais vinculados aos clientes |
-| `equipment` | Equipamentos instalados nos locais |
-| `work-orders` | Ordem, número, status, prioridade e ciclo principal |
-| `scheduling` | Agendamento e atribuição ao técnico |
-| `execution` | Início, preenchimento e conclusão em campo |
-| `checklists` | Templates versionados e respostas |
-| `evidence` | Metadados, upload e acesso a arquivos privados |
-| `review` | Aprovação e solicitação de correção |
-| `billing` | Fila pronta para faturar e marcação como faturada |
-| `audit` | Registro de ações críticas |
-| `health` | Liveness e readiness da aplicação |
+| Módulo              | Responsabilidade                                      |
+| ------------------- | ----------------------------------------------------- |
+| `auth`              | Login, sessão, refresh, logout e recuperação de senha |
+| `organizations`     | Dados e configurações da empresa cliente              |
+| `users`             | Usuários, perfis, ativação e desativação              |
+| `customers`         | Clientes atendidos pela organização                   |
+| `service-locations` | Locais vinculados aos clientes                        |
+| `equipment`         | Equipamentos instalados nos locais                    |
+| `work-orders`       | Ordem, número, status, prioridade e ciclo principal   |
+| `scheduling`        | Agendamento e atribuição ao técnico                   |
+| `execution`         | Início, preenchimento e conclusão em campo            |
+| `evidence`          | Metadados, upload e acesso a arquivos privados        |
+| `review`            | Aprovação e solicitação de correção                   |
+| `billing`           | Fila pronta para faturar e marcação como faturada     |
+| `audit`             | Registro de ações críticas                            |
+| `health`            | Liveness e readiness da aplicação                     |
 
 Evitar dependências circulares. Se dois módulos compartilham uma regra, avaliar se ela pertence ao domínio principal ou se a interação deve ocorrer por uma porta explícita.
 
@@ -725,18 +723,18 @@ inválidos, expirados, substituídos ou já utilizados recebem o mesmo erro púb
 
 ## Autorização e RBAC
 
-| Operação | `OWNER` | `ADMIN` | `TECHNICIAN` |
-| --- | :---: | :---: | :---: |
-| Gerenciar organização | Sim | Limitado | Não |
-| Gerenciar usuários | Sim | Sim, conforme política | Não |
-| Cadastrar clientes e equipamentos | Sim | Sim | Não |
-| Criar e agendar ordens | Sim | Sim | Não |
-| Visualizar todas as ordens da organização | Sim | Sim | Não |
-| Visualizar ordens próprias atribuídas | Sim | Sim | Sim |
-| Executar atendimento | Conforme necessidade | Conforme necessidade | Sim, se atribuído |
-| Revisar execução | Sim | Sim | Não |
-| Liberar para faturamento | Sim | Sim | Não |
-| Marcar como faturada | Sim | Sim | Não |
+| Operação                                  |       `OWNER`        |        `ADMIN`         |   `TECHNICIAN`    |
+| ----------------------------------------- | :------------------: | :--------------------: | :---------------: |
+| Gerenciar organização                     |         Sim          |        Limitado        |        Não        |
+| Gerenciar usuários                        |         Sim          | Sim, conforme política |        Não        |
+| Cadastrar clientes e equipamentos         |         Sim          |          Sim           |        Não        |
+| Criar e agendar ordens                    |         Sim          |          Sim           |        Não        |
+| Visualizar todas as ordens da organização |         Sim          |          Sim           |        Não        |
+| Visualizar ordens próprias atribuídas     |         Sim          |          Sim           |        Sim        |
+| Executar atendimento                      | Conforme necessidade |  Conforme necessidade  | Sim, se atribuído |
+| Revisar execução                          |         Sim          |          Sim           |        Não        |
+| Liberar para faturamento                  |         Sim          |          Sim           |        Não        |
+| Marcar como faturada                      |         Sim          |          Sim           |        Não        |
 
 RBAC não é suficiente sozinho. Além do perfil, toda operação deve verificar o relacionamento com o recurso.
 
@@ -904,24 +902,7 @@ UNIQUE (organization_id, work_order_number)
 - Organização e ordem.
 - Técnico responsável.
 - Início, conclusão e observações.
-- Snapshot dos requisitos aplicáveis à execução.
 - Versão para concorrência quando necessário.
-
-### `ChecklistTemplate`
-
-- Organização.
-- Nome e versão.
-- Definição dos itens.
-- Status ativo.
-- Templates utilizados não devem ser modificados retroativamente.
-
-### `ChecklistResponse`
-
-- Organização, execução e template/versionamento.
-- Snapshot dos itens apresentados ao técnico.
-- Respostas e timestamps.
-
-JSONB pode ser utilizado para a definição e snapshot quando simplificar o MVP, desde que exista validação de schema, versionamento e consultas indexadas apenas onde necessário.
 
 ### `Evidence`
 
@@ -1087,18 +1068,18 @@ enum WorkOrderStatus {
 
 ### Transições permitidas
 
-| Origem | Ação | Destino | Ator permitido |
-| --- | --- | --- | --- |
-| `DRAFT` | Agendar e atribuir | `SCHEDULED` | `OWNER`, `ADMIN` |
-| `DRAFT` | Cancelar | `CANCELED` | `OWNER`, `ADMIN` |
-| `SCHEDULED` | Iniciar atendimento | `IN_PROGRESS` | Técnico atribuído |
-| `SCHEDULED` | Reagendar | `SCHEDULED` | `OWNER`, `ADMIN` |
-| `SCHEDULED` | Cancelar | `CANCELED` | `OWNER`, `ADMIN` |
-| `IN_PROGRESS` | Enviar para revisão | `AWAITING_REVIEW` | Técnico atribuído |
-| `AWAITING_REVIEW` | Solicitar correção | `PENDING_CORRECTION` | `OWNER`, `ADMIN` |
-| `AWAITING_REVIEW` | Aprovar | `READY_TO_BILL` | `OWNER`, `ADMIN` |
-| `PENDING_CORRECTION` | Retomar correção | `IN_PROGRESS` | Técnico atribuído |
-| `READY_TO_BILL` | Marcar como faturada | `BILLED` | `OWNER`, `ADMIN` |
+| Origem               | Ação                 | Destino              | Ator permitido    |
+| -------------------- | -------------------- | -------------------- | ----------------- |
+| `DRAFT`              | Agendar e atribuir   | `SCHEDULED`          | `OWNER`, `ADMIN`  |
+| `DRAFT`              | Cancelar             | `CANCELED`           | `OWNER`, `ADMIN`  |
+| `SCHEDULED`          | Iniciar atendimento  | `IN_PROGRESS`        | Técnico atribuído |
+| `SCHEDULED`          | Reagendar            | `SCHEDULED`          | `OWNER`, `ADMIN`  |
+| `SCHEDULED`          | Cancelar             | `CANCELED`           | `OWNER`, `ADMIN`  |
+| `IN_PROGRESS`        | Enviar para revisão  | `AWAITING_REVIEW`    | Técnico atribuído |
+| `AWAITING_REVIEW`    | Solicitar correção   | `PENDING_CORRECTION` | `OWNER`, `ADMIN`  |
+| `AWAITING_REVIEW`    | Aprovar              | `READY_TO_BILL`      | `OWNER`, `ADMIN`  |
+| `PENDING_CORRECTION` | Retomar correção     | `IN_PROGRESS`        | Técnico atribuído |
+| `READY_TO_BILL`      | Marcar como faturada | `BILLED`             | `OWNER`, `ADMIN`  |
 
 Cancelamento após início exige uma decisão explícita de produto e não deve ser liberado silenciosamente.
 
@@ -1109,8 +1090,7 @@ Cancelamento após início exige uma decisão explícita de produto e não deve 
 - A transição valida tenant, ator, status atual, versão e pré-condições.
 - A transição e o histórico são persistidos na mesma transação.
 - Ações críticas também geram auditoria na mesma unidade de consistência quando possível.
-- Envio para revisão exige todos os itens obrigatórios do snapshot do checklist.
-- Evidências obrigatórias precisam estar confirmadas, não apenas com upload iniciado.
+- Evidências enviadas precisam estar confirmadas, não apenas com upload iniciado.
 - Solicitação de correção exige descrição.
 - Aprovação calcula e congela os dados relevantes para a liberação.
 - Marcação como faturada registra ator e timestamp, mas não emite documento fiscal.
@@ -1129,15 +1109,15 @@ Esta seção apresenta os recursos esperados, não substitui a especificação O
 
 ### Autenticação
 
-| Rota | Acesso | Sucesso | Resposta |
-| --- | --- | ---: | --- |
-| `POST /api/v1/auth/login` | Público, com `Origin` permitido | `200` | Usuário e organização; grava access e refresh cookies |
-| `GET /api/v1/auth/me` | Access cookie válido | `200` | Usuário e organização atuais |
-| `POST /api/v1/auth/refresh` | Refresh cookie e `Origin` permitido | `204` | Sem body; rotaciona ambos os cookies |
-| `POST /api/v1/auth/logout` | Público e idempotente, com `Origin` permitido | `204` | Sem body; revoga a sessão reconhecida e limpa cookies |
-| `POST /api/v1/auth/logout-all` | Access cookie válido e `Origin` permitido | `204` | Sem body; revoga as sessões do usuário no tenant e limpa cookies |
-| `POST /api/v1/auth/forgot-password` | Público, com `Origin` permitido | `202` | Mensagem genérica; nunca revela se o e-mail existe |
-| `POST /api/v1/auth/reset-password` | Público, com `Origin` permitido | `204` | Consome token de uso único, redefine senha e revoga sessões |
+| Rota                                | Acesso                                        | Sucesso | Resposta                                                         |
+| ----------------------------------- | --------------------------------------------- | ------: | ---------------------------------------------------------------- |
+| `POST /api/v1/auth/login`           | Público, com `Origin` permitido               |   `200` | Usuário e organização; grava access e refresh cookies            |
+| `GET /api/v1/auth/me`               | Access cookie válido                          |   `200` | Usuário e organização atuais                                     |
+| `POST /api/v1/auth/refresh`         | Refresh cookie e `Origin` permitido           |   `204` | Sem body; rotaciona ambos os cookies                             |
+| `POST /api/v1/auth/logout`          | Público e idempotente, com `Origin` permitido |   `204` | Sem body; revoga a sessão reconhecida e limpa cookies            |
+| `POST /api/v1/auth/logout-all`      | Access cookie válido e `Origin` permitido     |   `204` | Sem body; revoga as sessões do usuário no tenant e limpa cookies |
+| `POST /api/v1/auth/forgot-password` | Público, com `Origin` permitido               |   `202` | Mensagem genérica; nunca revela se o e-mail existe               |
+| `POST /api/v1/auth/reset-password`  | Público, com `Origin` permitido               |   `204` | Consome token de uso único, redefine senha e revoga sessões      |
 
 Tokens, hashes, identidade interna e status de conta nunca aparecem nos bodies.
 O token de redefinição é entregue somente pelo `EmailGateway`; o adapter local
@@ -1358,18 +1338,6 @@ O número visível da OS deve ser único e legível dentro da organização.
 
 Formato visual pode começar simples e configurável posteriormente. Não acoplar regras fiscais à numeração operacional.
 
-## Checklists
-
-- Templates pertencem à organização.
-- Itens possuem tipo, label, obrigatoriedade e ordem.
-- Tipos do MVP devem ser limitados ao necessário: texto curto, texto longo, número, seleção, boolean e evidência requerida quando aplicável.
-- Template usado por uma execução deve ser versionado ou ter snapshot.
-- Alterar template não modifica ordens históricas.
-- Respostas precisam ser validadas contra o snapshot utilizado.
-- Submissão para revisão verifica todos os itens obrigatórios.
-
-Evitar um form builder genérico e ilimitado no MVP. Implementar apenas os tipos comprovadamente necessários aos pilotos.
-
 ## Evidências e object storage
 
 O bucket deve ser privado.
@@ -1422,7 +1390,6 @@ O revisor deve receber uma visão consolidada de:
 
 - Dados da ordem.
 - Técnico e horários.
-- Checklist e respostas.
 - Evidências disponíveis.
 - Observações.
 - Materiais, horas e serviços adicionais.
@@ -1649,7 +1616,6 @@ Priorizar regras puras e casos de uso:
 - State machine da ordem.
 - Políticas de autorização dependentes do recurso.
 - Cálculo de valores.
-- Validação de checklist.
 - Aprovação e correção.
 - Controle de concorrência.
 - Normalização e value objects.
@@ -1680,8 +1646,8 @@ Fluxos mínimos:
 5. Tentativa de técnico acessar ordem não atribuída.
 6. Cadastro de cliente, local e equipamento.
 7. Criação, agendamento e atribuição de ordem.
-8. Execução, checklist e evidência.
-9. Rejeição de submissão incompleta.
+8. Execução e evidência.
+9. Envio para revisão.
 10. Solicitação e correção de pendência.
 11. Aprovação e cálculo do valor final.
 12. Entrada na fila pronta para faturar.
@@ -1797,7 +1763,7 @@ para filesystem efêmero ou limite por processo.
 6. Clientes, locais e equipamentos.
 7. Ordens, numeração, atribuição e state machine.
 8. Agenda e consultas do técnico.
-9. Execução e checklist versionado.
+9. Execução em campo.
 10. Evidências privadas e upload intent.
 11. Itens adicionais e cálculo monetário.
 12. Revisão, correção e aprovação.
@@ -1837,7 +1803,7 @@ A API está pronta para piloto quando:
 - Clientes, locais e equipamentos podem ser gerenciados.
 - Ordens podem ser criadas, numeradas, atribuídas e agendadas.
 - Técnico acessa somente ordens autorizadas.
-- Execução, checklist e itens adicionais são persistidos.
+- Execução e itens adicionais são persistidos.
 - Evidências são armazenadas de forma privada e autorizada.
 - Submissão incompleta é rejeitada corretamente.
 - Revisão aprova ou solicita correção preservando histórico.

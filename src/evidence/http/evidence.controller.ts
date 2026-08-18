@@ -23,6 +23,7 @@ import { accessCookieName } from '../../auth/http/auth-cookies';
 import { CurrentPrincipal } from '../../auth/http/current-principal.decorator';
 import { Roles } from '../../auth/http/roles.decorator';
 import { getRequestId, type RequestWithId } from '../../http/request-id';
+import { toTechnicianWorkOrderResponse } from '../../work-orders/http/technician-work-order.presenter';
 import { EvidenceService } from '../application/evidence.service';
 import {
   CreateEvidenceIntentDto,
@@ -48,18 +49,22 @@ export class EvidenceController {
   @ApiOkResponse({
     description: 'Intent privado e ordem com versão atualizada.',
   })
-  createIntent(
+  async createIntent(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Req() request: RequestWithId,
     @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
     @Body() input: CreateEvidenceIntentDto,
   ) {
-    return this.evidence.createIntent(
+    const result = await this.evidence.createIntent(
       principal,
       getRequestId(request),
       workOrderId,
       input,
     );
+    return {
+      ...result,
+      workOrder: toTechnicianWorkOrderResponse(result.workOrder),
+    };
   }
 
   @Put('evidence/:evidenceId/upload')
@@ -82,19 +87,21 @@ export class EvidenceController {
 
   @Post('work-orders/:workOrderId/execution/evidence/:evidenceId/confirm')
   @ApiOkResponse({ description: 'Evidência confirmada e ordem atualizada.' })
-  confirm(
+  async confirm(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Req() request: RequestWithId,
     @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
     @Param('evidenceId', new ParseUUIDPipe()) evidenceId: string,
     @Body() input: EvidenceVersionDto,
   ) {
-    return this.evidence.confirm(
-      principal,
-      getRequestId(request),
-      workOrderId,
-      evidenceId,
-      input.version,
+    return toTechnicianWorkOrderResponse(
+      await this.evidence.confirm(
+        principal,
+        getRequestId(request),
+        workOrderId,
+        evidenceId,
+        input.version,
+      ),
     );
   }
 
@@ -121,19 +128,21 @@ export class EvidenceController {
 
   @Delete('work-orders/:workOrderId/execution/evidence/:evidenceId')
   @ApiOkResponse({ description: 'Evidência removida e ordem atualizada.' })
-  remove(
+  async remove(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Req() request: RequestWithId,
     @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
     @Param('evidenceId', new ParseUUIDPipe()) evidenceId: string,
     @Body() input: EvidenceVersionDto,
   ) {
-    return this.evidence.remove(
-      principal,
-      getRequestId(request),
-      workOrderId,
-      evidenceId,
-      input.version,
+    return toTechnicianWorkOrderResponse(
+      await this.evidence.remove(
+        principal,
+        getRequestId(request),
+        workOrderId,
+        evidenceId,
+        input.version,
+      ),
     );
   }
 }

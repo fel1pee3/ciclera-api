@@ -2,10 +2,6 @@ import type {
   WorkOrderPriority,
   WorkOrderStatus,
 } from '../../domain/work-order';
-import type {
-  ChecklistAnswer,
-  ChecklistSnapshot,
-} from '../../../checklists/domain/checklist';
 
 export const TECHNICIAN_WORK_ORDER_REPOSITORY = Symbol(
   'TECHNICIAN_WORK_ORDER_REPOSITORY',
@@ -60,11 +56,6 @@ export interface WorkOrderExecution {
   version: number;
   startedAt: Date;
   updatedAt: Date;
-  checklist: {
-    snapshot: ChecklistSnapshot;
-    responses: ChecklistAnswer[];
-    missingRequiredFieldIds: string[];
-  } | null;
   evidence: Array<{
     id: string;
     kind: 'PHOTO' | 'SIGNATURE';
@@ -93,19 +84,14 @@ export type TechnicianExecutionMutationResult =
   | { status: 'STATUS_LOCKED' }
   | { status: 'VERSION_CONFLICT' }
   | { status: 'EXECUTION_EXISTS' }
-  | { status: 'EXECUTION_NOT_FOUND' }
-  | { status: 'INVALID_CHECKLIST_RESPONSE' };
-
-export type ExecutionCompletionIssue =
-  'CHECKLIST_INCOMPLETE' | 'PHOTO_REQUIRED' | 'SIGNATURE_REQUIRED';
+  | { status: 'EXECUTION_NOT_FOUND' };
 
 export type SubmitForReviewResult =
   | { status: 'SUCCESS' | 'ALREADY_SUBMITTED' }
   | { status: 'NOT_FOUND' }
   | { status: 'STATUS_LOCKED' }
   | { status: 'VERSION_CONFLICT' }
-  | { status: 'EXECUTION_NOT_FOUND' }
-  | { status: 'INCOMPLETE'; issues: ExecutionCompletionIssue[] };
+  | { status: 'EXECUTION_NOT_FOUND' };
 
 export type ResumeCorrectionResult =
   | { status: 'SUCCESS' | 'ALREADY_RESUMED' }
@@ -145,14 +131,6 @@ export interface TechnicianWorkOrderRepository {
     workOrderId: string;
     expectedVersion: number;
     notes: string | null;
-    requestId: string;
-  }): Promise<TechnicianExecutionMutationResult>;
-  updateChecklist(input: {
-    organizationId: string;
-    technicianId: string;
-    workOrderId: string;
-    expectedVersion: number;
-    responses: ChecklistAnswer[];
     requestId: string;
   }): Promise<TechnicianExecutionMutationResult>;
   submitForReview(input: {

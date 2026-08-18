@@ -76,6 +76,9 @@ export interface CustomerRepository {
   archiveCustomer(
     input: MutationContext & { customerId: string },
   ): Promise<CustomerWriteResult>;
+  reactivateCustomer(
+    input: MutationContext & { customerId: string },
+  ): Promise<CustomerWriteResult>;
   listLocations(input: {
     organizationId: string;
     customerId: string;

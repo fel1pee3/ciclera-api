@@ -206,6 +206,36 @@ describe('Customers and service locations persistence', () => {
         },
       }),
     ).resolves.not.toBeNull();
+
+    await expect(
+      customers.reactivateCustomer(
+        context(ownerB, 'req_cross_reactivate'),
+        customer.id,
+      ),
+    ).rejects.toBeInstanceOf(CustomerNotFoundError);
+
+    const reactivated = await customers.reactivateCustomer(
+      context(ownerA, 'req_reactivate'),
+      customer.id,
+    );
+    expect(reactivated.archivedAt).toBeNull();
+    await expect(
+      customers.createLocation(
+        context(ownerA, 'req_after_reactivate'),
+        customer.id,
+        { ...locationInput, name: 'Unidade reativada' },
+      ),
+    ).resolves.toMatchObject({ name: 'Unidade reativada' });
+    await expect(
+      prisma.auditLog.findFirst({
+        where: {
+          organizationId: ownerA.organizationId,
+          resourceId: customer.id,
+          action: 'CUSTOMER_REACTIVATED',
+          requestId: 'req_reactivate',
+        },
+      }),
+    ).resolves.not.toBeNull();
   });
 });
 

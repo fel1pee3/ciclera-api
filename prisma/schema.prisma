@@ -70,7 +70,6 @@ enum ReviewDecision {
 enum ReviewReason {
   REQUIRED_PHOTO_MISSING
   SIGNATURE_MISSING
-  CHECKLIST_INCOMPLETE
   MATERIAL_WITHOUT_VALUE
   ADDITIONAL_SERVICE_UNAPPROVED
   EQUIPMENT_DATA_INCORRECT
@@ -92,8 +91,6 @@ model Organization {
   workOrderStatusHistory WorkOrderStatusHistory[]
   workOrderAssignments   WorkOrderAssignment[]
   workOrderExecutions    WorkOrderExecution[]
-  checklistTemplates     ChecklistTemplate[]
-  checklistResponses     ChecklistResponse[]
   evidence               Evidence[]
   additionalItems        AdditionalItem[]
   reviews                Review[]
@@ -217,7 +214,6 @@ model User {
   createdAssignments        WorkOrderAssignment[]    @relation("WorkOrderAssignmentCreator")
   closedAssignments         WorkOrderAssignment[]    @relation("WorkOrderAssignmentCloser")
   workOrderExecutions       WorkOrderExecution[]     @relation("WorkOrderExecutionTechnician")
-  createdChecklistTemplates ChecklistTemplate[]      @relation("ChecklistTemplateCreator")
   createdEvidence           Evidence[]               @relation("EvidenceCreator")
   createdAdditionalItems    AdditionalItem[]         @relation("AdditionalItemCreator")
   updatedAdditionalItems    AdditionalItem[]         @relation("AdditionalItemUpdater")
@@ -342,10 +338,6 @@ model WorkOrderExecution {
   technicianId        String              @map("technician_id") @db.Uuid
   technician          User                @relation("WorkOrderExecutionTechnician", fields: [organizationId, technicianId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
   notes               String?             @db.VarChar(4000)
-  checklistTemplateId String?             @map("checklist_template_id") @db.Uuid
-  checklistTemplate   ChecklistTemplate?  @relation(fields: [organizationId, checklistTemplateId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
-  checklistSnapshot   Json?               @map("checklist_snapshot")
-  checklistResponses  ChecklistResponse[]
   evidence            Evidence[]
   additionalItems     AdditionalItem[]
   version             Int                 @default(1)
@@ -409,44 +401,6 @@ model AdditionalItem {
   @@index([organizationId, workOrderId, createdAt, id])
   @@index([organizationId, executionId, createdAt, id])
   @@map("additional_items")
-}
-
-model ChecklistTemplate {
-  id              String               @id @default(uuid()) @db.Uuid
-  organizationId  String               @map("organization_id") @db.Uuid
-  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  templateKey     String               @default("default") @map("template_key") @db.VarChar(80)
-  name            String               @db.VarChar(160)
-  version         Int
-  fields          Json
-  requirePhoto    Boolean              @default(false) @map("require_photo")
-  requireSignature Boolean             @default(false) @map("require_signature")
-  createdByUserId String               @map("created_by_user_id") @db.Uuid
-  createdBy       User                 @relation("ChecklistTemplateCreator", fields: [organizationId, createdByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
-  executions      WorkOrderExecution[]
-  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  @@unique([organizationId, id])
-  @@unique([organizationId, templateKey, version])
-  @@index([organizationId, templateKey, version(sort: Desc)])
-  @@map("checklist_templates")
-}
-
-model ChecklistResponse {
-  id             String             @id @default(uuid()) @db.Uuid
-  organizationId String             @map("organization_id") @db.Uuid
-  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  executionId    String             @map("execution_id") @db.Uuid
-  execution      WorkOrderExecution @relation(fields: [organizationId, executionId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
-  fieldId        String             @map("field_id") @db.VarChar(80)
-  value          Json
-  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  @@unique([organizationId, id])
-  @@unique([organizationId, executionId, fieldId])
-  @@index([organizationId, executionId, updatedAt])
-  @@map("checklist_responses")
 }
 
 model Review {

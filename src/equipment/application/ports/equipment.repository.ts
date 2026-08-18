@@ -55,4 +55,7 @@ export interface EquipmentRepository {
   archive(
     input: EquipmentMutationContext & { equipmentId: string },
   ): Promise<EquipmentWriteResult>;
+  reactivate(
+    input: EquipmentMutationContext & { equipmentId: string },
+  ): Promise<EquipmentWriteResult>;
 }

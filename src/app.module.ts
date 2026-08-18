@@ -6,7 +6,6 @@ import { AdditionalItemsModule } from './additional-items/additional-items.modul
 import { authIdentifierTracker } from './auth/http/auth-rate-limit';
 import { validateEnvironment } from './config/environment';
 import { CustomersModule } from './customers/customers.module';
-import { ChecklistsModule } from './checklists/checklists.module';
 import { EquipmentModule } from './equipment/equipment.module';
 import { EvidenceModule } from './evidence/evidence.module';
 import { HealthModule } from './health/health.module';
@@ -42,7 +41,6 @@ import { ImportsModule } from './imports/imports.module';
     AuthModule,
     UsersModule,
     CustomersModule,
-    ChecklistsModule,
     EquipmentModule,
     WorkOrdersModule,
     EvidenceModule,

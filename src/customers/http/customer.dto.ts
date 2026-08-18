@@ -143,11 +143,13 @@ export class LocationInputDto {
   @MaxLength(160)
   name!: string;
 
-  @ApiProperty({ maxLength: 16 })
-  @Transform(trim)
+  @ApiProperty({
+    description: 'CEP armazenado somente com 8 dígitos.',
+    example: '01310100',
+  })
+  @Transform(digits)
   @IsString()
-  @MinLength(3)
-  @MaxLength(16)
+  @Matches(/^\d{8}$/, { message: 'Informe um CEP com 8 dígitos.' })
   postalCode!: string;
 
   @ApiProperty({ maxLength: 160 })
@@ -205,11 +207,17 @@ export class LocationInputDto {
   @MaxLength(160)
   contactName?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, maxLength: 32 })
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Telefone brasileiro com país, DDD e número, somente dígitos.',
+    example: '551134567890',
+  })
   @IsOptional()
-  @Transform(trim)
+  @Transform(digits)
   @IsString()
-  @MaxLength(32)
+  @Matches(/^55\d{10,11}$/, {
+    message: 'Informe o país 55, DDD e telefone completos.',
+  })
   contactPhone?: string | null;
 
   @ApiPropertyOptional({ nullable: true, maxLength: 1000 })

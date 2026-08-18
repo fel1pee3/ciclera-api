@@ -1,7 +1,6 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
 import { AppModule } from '../../src/app.module';
-import { ChecklistTemplatesService } from '../../src/checklists/application/checklist-templates.service';
 import type { AuthenticatedPrincipal } from '../../src/auth/domain/authenticated-principal';
 import { PrismaService } from '../../src/infrastructure/database/prisma/prisma.service';
 import { TechnicianWorkOrdersService } from '../../src/work-orders/application/technician-work-orders.service';
@@ -13,8 +12,6 @@ import {
   WorkOrderExecutionAlreadyStartedError,
   WorkOrderNotFoundError,
   WorkOrderVersionConflictError,
-  ChecklistResponseInvalidError,
-  WorkOrderExecutionIncompleteError,
   WorkOrderManagementForbiddenError,
   WorkOrderStatusLockedError,
 } from '../../src/work-orders/domain/work-order.errors';
@@ -24,7 +21,6 @@ describe('Work order execution draft', () => {
   let prisma: PrismaService;
   let managerService: WorkOrdersService;
   let fieldService: TechnicianWorkOrdersService;
-  let checklistService: ChecklistTemplatesService;
   let reviewsService: ReviewsService;
   let evidenceService: EvidenceService;
   let organizationId: string;
@@ -40,7 +36,6 @@ describe('Work order execution draft', () => {
     prisma = moduleRef.get(PrismaService);
     managerService = moduleRef.get(WorkOrdersService);
     fieldService = moduleRef.get(TechnicianWorkOrdersService);
-    checklistService = moduleRef.get(ChecklistTemplatesService);
     reviewsService = moduleRef.get(ReviewsService);
     evidenceService = moduleRef.get(EvidenceService);
     await assertTestDatabase(prisma);
@@ -75,9 +70,7 @@ describe('Work order execution draft', () => {
       await prisma.evidence.deleteMany({ where: { organizationId } });
       await prisma.additionalItem.deleteMany({ where: { organizationId } });
       await prisma.review.deleteMany({ where: { organizationId } });
-      await prisma.checklistResponse.deleteMany({ where: { organizationId } });
       await prisma.workOrderExecution.deleteMany({ where: { organizationId } });
-      await prisma.checklistTemplate.deleteMany({ where: { organizationId } });
       await prisma.workOrderAssignment.deleteMany({
         where: { organizationId },
       });
@@ -208,104 +201,7 @@ describe('Work order execution draft', () => {
     ).rejects.toBeInstanceOf(WorkOrderExecutionAlreadyStartedError);
   });
 
-  it('snapshots the template and validates partial responses against that version', async () => {
-    const firstTemplate = await checklistService.createVersion(
-      owner,
-      'checklist-v1',
-      {
-        name: 'Checklist preventivo',
-        fields: [
-          {
-            id: 'diagnosis',
-            label: 'Diagnóstico',
-            type: 'SHORT_TEXT',
-            required: true,
-          },
-          {
-            id: 'operating',
-            label: 'Equipamento operando',
-            type: 'BOOLEAN',
-            required: false,
-          },
-        ],
-      },
-    );
-    const scheduled = await createScheduled('checklist');
-    const started = await fieldService.start(
-      technician,
-      'checklist-start',
-      scheduled.id,
-      scheduled.version,
-    );
-    expect(started.execution?.checklist).toMatchObject({
-      snapshot: { templateId: firstTemplate.id, version: 1 },
-      responses: [],
-      missingRequiredFieldIds: ['diagnosis'],
-    });
-
-    await checklistService.createVersion(owner, 'checklist-v2', {
-      name: 'Checklist preventivo revisado',
-      fields: [
-        {
-          id: 'pressure',
-          label: 'Pressão',
-          type: 'NUMBER',
-          required: true,
-        },
-      ],
-    });
-    const historical = await fieldService.find(technician, scheduled.id);
-    expect(historical.execution?.checklist?.snapshot).toMatchObject({
-      templateId: firstTemplate.id,
-      version: 1,
-    });
-
-    await expect(
-      fieldService.updateChecklist(
-        technician,
-        'checklist-invalid',
-        scheduled.id,
-        started.execution?.version ?? 0,
-        [{ fieldId: 'operating', value: 'sim' }],
-      ),
-    ).rejects.toBeInstanceOf(ChecklistResponseInvalidError);
-
-    const saved = await fieldService.updateChecklist(
-      technician,
-      'checklist-save',
-      scheduled.id,
-      started.execution?.version ?? 0,
-      [{ fieldId: 'diagnosis', value: 'Sistema normalizado' }],
-    );
-    expect(saved.execution?.checklist).toMatchObject({
-      responses: [{ fieldId: 'diagnosis', value: 'Sistema normalizado' }],
-      missingRequiredFieldIds: [],
-    });
-    await expect(
-      fieldService.updateChecklist(
-        technician,
-        'checklist-stale',
-        scheduled.id,
-        started.execution?.version ?? 0,
-        [{ fieldId: 'diagnosis', value: 'Sobrescrita' }],
-      ),
-    ).rejects.toBeInstanceOf(WorkOrderVersionConflictError);
-  });
-
-  it('submits only complete execution once and locks further edits', async () => {
-    await checklistService.createVersion(owner, 'completion-template', {
-      name: 'Checklist de conclusão',
-      requirePhoto: true,
-      requireSignature: true,
-      fields: [
-        {
-          id: 'completion',
-          label: 'Serviço concluído',
-          type: 'BOOLEAN',
-          required: true,
-        },
-      ],
-    });
+  it('submits the execution once and locks further edits', async () => {
     const scheduled = await createScheduled('completion');
     const started = await fieldService.start(
       technician,
@@ -313,37 +209,7 @@ describe('Work order execution draft', () => {
       scheduled.id,
       scheduled.version,
     );
-    const initialExecutionVersion = started.execution?.version ?? 0;
-
-    try {
-      await fieldService.submitForReview(
-        technician,
-        'completion-incomplete',
-        scheduled.id,
-        initialExecutionVersion,
-      );
-      throw new Error('Expected incomplete execution.');
-    } catch (error: unknown) {
-      expect(error).toBeInstanceOf(WorkOrderExecutionIncompleteError);
-      if (!(error instanceof WorkOrderExecutionIncompleteError)) throw error;
-      expect(error.issues).toEqual([
-        'CHECKLIST_INCOMPLETE',
-        'PHOTO_REQUIRED',
-        'SIGNATURE_REQUIRED',
-      ]);
-    }
-    await expect(
-      prisma.workOrder.findUniqueOrThrow({ where: { id: scheduled.id } }),
-    ).resolves.toMatchObject({ status: 'IN_PROGRESS' });
-
-    const answered = await fieldService.updateChecklist(
-      technician,
-      'completion-checklist',
-      scheduled.id,
-      initialExecutionVersion,
-      [{ fieldId: 'completion', value: true }],
-    );
-    const executionId = answered.execution?.id;
+    const executionId = started.execution?.id;
     if (!executionId) throw new Error('Expected execution.');
     await prisma.evidence.createMany({
       data: [
@@ -398,7 +264,7 @@ describe('Work order execution draft', () => {
       technician,
       'completion-submit',
       scheduled.id,
-      answered.execution?.version ?? 0,
+      started.execution?.version ?? 0,
     );
     expect(submitted.status).toBe('AWAITING_REVIEW');
     expect(submitted.actualEndAt).toBeInstanceOf(Date);
@@ -406,7 +272,7 @@ describe('Work order execution draft', () => {
       technician,
       'completion-repeat',
       scheduled.id,
-      answered.execution?.version ?? 0,
+      started.execution?.version ?? 0,
     );
     await expect(
       prisma.workOrderStatusHistory.count({
@@ -425,7 +291,6 @@ describe('Work order execution draft', () => {
     });
     expect(queue.items.map((item) => item.id)).toContain(scheduled.id);
     const review = await reviewsService.find(owner, scheduled.id);
-    expect(review.execution.checklist?.missingRequiredFieldIds).toEqual([]);
     expect(review.execution.evidence.map((item) => item.kind).sort()).toEqual([
       'PHOTO',
       'SIGNATURE',

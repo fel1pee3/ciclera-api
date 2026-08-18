@@ -90,7 +90,43 @@ describe('Customers HTTP contract (e2e)', () => {
     expect(response.body).toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 
-  it('exposes create and archive contracts without a delete endpoint', async () => {
+  it('normalizes and validates the service location CEP and phone', async () => {
+    await request(app.getHttpServer())
+      .post(`/api/v1/customers/${customerId}/locations`)
+      .send({
+        name: 'Unidade Centro',
+        postalCode: '01310-100',
+        street: 'Avenida Paulista',
+        number: '1578',
+        neighborhood: 'Bela Vista',
+        city: 'São Paulo',
+        state: 'SP',
+        contactPhone: '+55 (11) 3456-7890',
+      })
+      .expect(201)
+      .expect(({ body }) =>
+        expect(body).toMatchObject({
+          postalCode: '01310100',
+          contactPhone: '551134567890',
+        }),
+      );
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/customers/${customerId}/locations`)
+      .send({
+        name: 'Unidade inválida',
+        postalCode: '01310',
+        street: 'Avenida Paulista',
+        number: '1578',
+        neighborhood: 'Bela Vista',
+        city: 'São Paulo',
+        state: 'SP',
+        contactPhone: '+55 (11) 3456',
+      })
+      .expect(422);
+  });
+
+  it('exposes create, archive, and reactivate contracts without a delete endpoint', async () => {
     await request(app.getHttpServer())
       .post('/api/v1/customers')
       .send({
@@ -112,6 +148,10 @@ describe('Customers HTTP contract (e2e)', () => {
     await request(app.getHttpServer())
       .post(`/api/v1/customers/${customerId}/archive`)
       .expect(200);
+    await request(app.getHttpServer())
+      .post(`/api/v1/customers/${customerId}/reactivate`)
+      .expect(200)
+      .expect(({ body }) => expect(body).toMatchObject({ archivedAt: null }));
     await request(app.getHttpServer())
       .delete(`/api/v1/customers/${customerId}`)
       .expect(404);
@@ -168,15 +208,28 @@ class TestCustomerRepository implements CustomerRepository {
       customer: { ...customer, archivedAt: now },
     });
   }
+  reactivateCustomer() {
+    return Promise.resolve<CustomerWriteResult>({
+      status: 'SUCCESS',
+      customer,
+    });
+  }
   listLocations() {
     return Promise.resolve({ items: [], page: 1, pageSize: 20, total: 0 });
   }
   findLocation() {
     return Promise.resolve(null);
   }
-  createLocation() {
+  createLocation(input: Parameters<CustomerRepository['createLocation']>[0]) {
     return Promise.resolve<LocationWriteResult>({
-      status: 'CUSTOMER_NOT_FOUND',
+      status: 'SUCCESS',
+      location: {
+        ...location,
+        customerId: input.customerId,
+        name: input.name,
+        postalCode: input.postalCode,
+        contactPhone: input.contactPhone,
+      },
     });
   }
   updateLocation() {
@@ -194,6 +247,25 @@ const customer = {
   phone: null,
   notes: null,
   archivedAt: null,
+  createdAt: now,
+  updatedAt: now,
+};
+const location = {
+  id: '41000000-0000-4000-8000-000000000001',
+  customerId,
+  name: 'Unidade Centro',
+  postalCode: '01310100',
+  street: 'Avenida Paulista',
+  number: '1578',
+  complement: null,
+  neighborhood: 'Bela Vista',
+  city: 'São Paulo',
+  state: 'SP',
+  country: 'BR',
+  contactName: null,
+  contactPhone: '551134567890',
+  accessInstructions: null,
+  status: 'ACTIVE' as const,
   createdAt: now,
   updatedAt: now,
 };

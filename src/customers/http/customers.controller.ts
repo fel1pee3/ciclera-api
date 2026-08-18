@@ -112,6 +112,21 @@ export class CustomersController {
     );
   }
 
+  @Post('customers/:customerId/reactivate')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ type: CustomerResponseDto })
+  reactivateCustomer(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Req() request: RequestWithId,
+    @Param('customerId', new ParseUUIDPipe()) customerId: string,
+  ): Promise<CustomerResponseDto> {
+    return this.customers.reactivateCustomer(
+      context(principal, request),
+      customerId,
+    );
+  }
+
   @Get('customers/:customerId/locations')
   @Header('Cache-Control', 'no-store')
   @ApiOkResponse({ type: LocationPageResponseDto })

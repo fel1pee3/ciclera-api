@@ -36,8 +36,6 @@ export interface ServiceReportData {
     technicianName: string;
     notes: string | null;
     startedAt: Date;
-    checklistSnapshot: unknown;
-    checklistResponses: Array<{ fieldId: string; value: unknown }>;
   };
   additionalItems: Array<{
     type: string;

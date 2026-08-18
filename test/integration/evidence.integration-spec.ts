@@ -75,9 +75,6 @@ describe('Private evidence', () => {
     for (const id of [organizationId, otherOrganizationId]) {
       if (!id) continue;
       await prisma.evidence.deleteMany({ where: { organizationId: id } });
-      await prisma.checklistResponse.deleteMany({
-        where: { organizationId: id },
-      });
       await prisma.workOrderExecution.deleteMany({
         where: { organizationId: id },
       });

@@ -62,10 +62,6 @@ function principal(role: 'OWNER' | 'TECHNICIAN'): AuthenticatedPrincipal {
 }
 
 function fixture(): ServiceReportData {
-  const fields = Array.from({ length: 50 }, (_, index) => ({
-    id: `field-${index}`,
-    label: `Campo técnico ${index} com descrição extensa para paginação`,
-  }));
   return {
     id: '1ff04fd9-c0b8-485a-8a36-a27ce3ca1419',
     number: 1n,
@@ -100,13 +96,10 @@ function fixture(): ServiceReportData {
     },
     execution: {
       technicianName: 'Técnico',
-      notes: 'Execução concluída.',
+      notes: 'Execução concluída com observações técnicas detalhadas. '.repeat(
+        200,
+      ),
       startedAt: new Date(),
-      checklistSnapshot: { fields },
-      checklistResponses: fields.map((field) => ({
-        fieldId: field.id,
-        value: 'Resposta validada e preservada no snapshot.',
-      })),
     },
     additionalItems: [
       {

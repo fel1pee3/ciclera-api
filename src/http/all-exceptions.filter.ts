@@ -48,10 +48,7 @@ import {
   WorkOrderStatusLockedError,
   WorkOrderTechnicianInvalidError,
   WorkOrderVersionConflictError,
-  ChecklistResponseInvalidError,
-  WorkOrderExecutionIncompleteError,
 } from '../work-orders/domain/work-order.errors';
-import { ChecklistDefinitionInvalidError } from '../checklists/domain/checklist.errors';
 import {
   EvidenceLimitExceededError,
   EvidenceNotFoundError,
@@ -389,45 +386,6 @@ function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
     };
   }
 
-  if (exception instanceof ChecklistDefinitionInvalidError) {
-    return {
-      type: 'https://ciclera.com.br/problems/checklist-definition-invalid',
-      title: 'Checklist inválido',
-      detail: 'Revise os campos e opções do checklist.',
-      code: 'CHECKLIST_DEFINITION_INVALID',
-    };
-  }
-
-  if (exception instanceof ChecklistResponseInvalidError) {
-    return {
-      type: 'https://ciclera.com.br/problems/checklist-response-invalid',
-      title: 'Resposta incompatível',
-      detail:
-        'Uma ou mais respostas não correspondem ao checklist desta execução.',
-      code: 'CHECKLIST_RESPONSE_INVALID',
-    };
-  }
-
-  if (exception instanceof WorkOrderExecutionIncompleteError) {
-    const messages: Record<string, string> = {
-      CHECKLIST_INCOMPLETE:
-        'Preencha todos os itens obrigatórios do checklist.',
-      PHOTO_REQUIRED: 'Adicione ao menos uma foto confirmada.',
-      SIGNATURE_REQUIRED: 'Colete e confirme a assinatura.',
-    };
-    return {
-      type: 'https://ciclera.com.br/problems/execution-incomplete',
-      title: 'Execução incompleta',
-      detail: 'Conclua as pendências antes de enviar para revisão.',
-      code: 'WORK_ORDER_EXECUTION_INCOMPLETE',
-      fieldErrors: {
-        completion: exception.issues.map(
-          (issue) => messages[issue] ?? 'Revise os dados da execução.',
-        ),
-      },
-    };
-  }
-
   if (
     exception instanceof EvidenceNotFoundError ||
     exception instanceof EvidenceTokenInvalidError
@@ -692,14 +650,6 @@ function getHttpStatus(exception: unknown): number {
   }
 
   if (exception instanceof WorkOrderScheduleInvalidError) {
-    return HttpStatus.UNPROCESSABLE_ENTITY;
-  }
-
-  if (
-    exception instanceof ChecklistDefinitionInvalidError ||
-    exception instanceof ChecklistResponseInvalidError ||
-    exception instanceof WorkOrderExecutionIncompleteError
-  ) {
     return HttpStatus.UNPROCESSABLE_ENTITY;
   }
 

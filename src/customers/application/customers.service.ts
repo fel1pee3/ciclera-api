@@ -141,6 +141,16 @@ export class CustomersService {
     );
   }
 
+  async reactivateCustomer(context: RequestContext, customerId: string) {
+    this.requireManager(context.principal);
+    return resolveCustomer(
+      await this.customers.reactivateCustomer({
+        ...mutationContext(context),
+        customerId,
+      }),
+    );
+  }
+
   async listLocations(
     context: RequestContext,
     customerId: string,

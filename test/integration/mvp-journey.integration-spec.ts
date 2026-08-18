@@ -7,7 +7,6 @@ import { AuthService } from '../../src/auth/application/auth.service';
 import type { AuthenticatedPrincipal } from '../../src/auth/domain/authenticated-principal';
 import { AuthenticationRejectedError } from '../../src/auth/domain/authentication-rejected.error';
 import { BillingService } from '../../src/billing/application/billing.service';
-import { ChecklistTemplatesService } from '../../src/checklists/application/checklist-templates.service';
 import { CustomersService } from '../../src/customers/application/customers.service';
 import { EquipmentService } from '../../src/equipment/application/equipment.service';
 import { EvidenceService } from '../../src/evidence/application/evidence.service';
@@ -28,7 +27,6 @@ describe('MVP commercial journey', () => {
   let auth: AuthService;
   let customers: CustomersService;
   let equipment: EquipmentService;
-  let checklists: ChecklistTemplatesService;
   let workOrders: WorkOrdersService;
   let field: TechnicianWorkOrdersService;
   let evidence: EvidenceService;
@@ -48,7 +46,6 @@ describe('MVP commercial journey', () => {
     auth = moduleRef.get(AuthService);
     customers = moduleRef.get(CustomersService);
     equipment = moduleRef.get(EquipmentService);
-    checklists = moduleRef.get(ChecklistTemplatesService);
     workOrders = moduleRef.get(WorkOrdersService);
     field = moduleRef.get(TechnicianWorkOrdersService);
     evidence = moduleRef.get(EvidenceService);
@@ -68,9 +65,7 @@ describe('MVP commercial journey', () => {
       await prisma.review.deleteMany({ where: { organizationId } });
       await prisma.evidence.deleteMany({ where: { organizationId } });
       await prisma.additionalItem.deleteMany({ where: { organizationId } });
-      await prisma.checklistResponse.deleteMany({ where: { organizationId } });
       await prisma.workOrderExecution.deleteMany({ where: { organizationId } });
-      await prisma.checklistTemplate.deleteMany({ where: { organizationId } });
       await prisma.workOrderAssignment.deleteMany({
         where: { organizationId },
       });
@@ -154,20 +149,6 @@ describe('MVP commercial journey', () => {
       category: 'Climatização',
       serialNumber: `SER-${suffix}`,
     });
-    await checklists.createVersion(ownerA, 'checklist', {
-      name: 'Conclusão da jornada',
-      requirePhoto: true,
-      requireSignature: true,
-      fields: [
-        {
-          id: 'completed',
-          label: 'Serviço concluído',
-          type: 'BOOLEAN',
-          required: true,
-        },
-      ],
-    });
-
     const draft = await workOrders.create(context(ownerA, 'work-order'), {
       customerId: customer.id,
       locationId: location.id,
@@ -200,13 +181,6 @@ describe('MVP commercial journey', () => {
       'start',
       draft.id,
       scheduled.version,
-    );
-    current = await field.updateChecklist(
-      technicianA,
-      'checklist-response',
-      draft.id,
-      requiredExecutionVersion(current),
-      [{ fieldId: 'completed', value: true }],
     );
     current = await addEvidence(
       evidence,

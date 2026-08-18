@@ -24,18 +24,16 @@ import { CurrentPrincipal } from '../../auth/http/current-principal.decorator';
 import { Roles } from '../../auth/http/roles.decorator';
 import { getRequestId, type RequestWithId } from '../../http/request-id';
 import { TechnicianWorkOrdersService } from '../application/technician-work-orders.service';
-import { formatWorkOrderNumber } from '../domain/work-order';
-import { formatQuantity } from '../../additional-items/domain/additional-item';
 import {
   TechnicianWorkOrderPageDto,
   TechnicianWorkOrderQueryDto,
   TechnicianWorkOrderResponseDto,
   StartWorkOrderExecutionDto,
   UpdateWorkOrderExecutionDto,
-  UpdateWorkOrderChecklistDto,
   SubmitForReviewDto,
   ResumeCorrectionDto,
 } from './technician-work-order.dto';
+import { toTechnicianWorkOrderResponse } from './technician-work-order.presenter';
 
 @ApiTags('field-work-orders')
 @ApiCookieAuth(accessCookieName)
@@ -52,7 +50,10 @@ export class TechnicianWorkOrdersController {
     @Query() query: TechnicianWorkOrderQueryDto,
   ): Promise<TechnicianWorkOrderPageDto> {
     const result = await this.workOrders.list(principal, query);
-    return { ...result, items: result.items.map(toResponse) };
+    return {
+      ...result,
+      items: result.items.map(toTechnicianWorkOrderResponse),
+    };
   }
 
   @Get(':workOrderId')
@@ -63,7 +64,9 @@ export class TechnicianWorkOrdersController {
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
   ): Promise<TechnicianWorkOrderResponseDto> {
-    return toResponse(await this.workOrders.find(principal, workOrderId));
+    return toTechnicianWorkOrderResponse(
+      await this.workOrders.find(principal, workOrderId),
+    );
   }
 
   @Post(':workOrderId/start')
@@ -76,7 +79,7 @@ export class TechnicianWorkOrdersController {
     @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
     @Body() input: StartWorkOrderExecutionDto,
   ): Promise<TechnicianWorkOrderResponseDto> {
-    return toResponse(
+    return toTechnicianWorkOrderResponse(
       await this.workOrders.start(
         principal,
         getRequestId(request),
@@ -95,33 +98,13 @@ export class TechnicianWorkOrdersController {
     @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
     @Body() input: UpdateWorkOrderExecutionDto,
   ): Promise<TechnicianWorkOrderResponseDto> {
-    return toResponse(
+    return toTechnicianWorkOrderResponse(
       await this.workOrders.updateExecution(
         principal,
         getRequestId(request),
         workOrderId,
         input.version,
         input.notes,
-      ),
-    );
-  }
-
-  @Patch(':workOrderId/execution/checklist')
-  @Header('Cache-Control', 'no-store')
-  @ApiOkResponse({ type: TechnicianWorkOrderResponseDto })
-  async updateChecklist(
-    @CurrentPrincipal() principal: AuthenticatedPrincipal,
-    @Req() request: RequestWithId,
-    @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
-    @Body() input: UpdateWorkOrderChecklistDto,
-  ): Promise<TechnicianWorkOrderResponseDto> {
-    return toResponse(
-      await this.workOrders.updateChecklist(
-        principal,
-        getRequestId(request),
-        workOrderId,
-        input.version,
-        input.responses,
       ),
     );
   }
@@ -136,7 +119,7 @@ export class TechnicianWorkOrdersController {
     @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
     @Body() input: SubmitForReviewDto,
   ): Promise<TechnicianWorkOrderResponseDto> {
-    return toResponse(
+    return toTechnicianWorkOrderResponse(
       await this.workOrders.submitForReview(
         principal,
         getRequestId(request),
@@ -156,7 +139,7 @@ export class TechnicianWorkOrdersController {
     @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
     @Body() input: ResumeCorrectionDto,
   ): Promise<TechnicianWorkOrderResponseDto> {
-    return toResponse(
+    return toTechnicianWorkOrderResponse(
       await this.workOrders.resumeCorrection(
         principal,
         getRequestId(request),
@@ -165,31 +148,4 @@ export class TechnicianWorkOrdersController {
       ),
     );
   }
-}
-
-function toResponse(
-  workOrder: Awaited<ReturnType<TechnicianWorkOrdersService['find']>>,
-): TechnicianWorkOrderResponseDto {
-  return {
-    ...workOrder,
-    number: formatWorkOrderNumber(workOrder.number),
-    execution: workOrder.execution
-      ? {
-          ...workOrder.execution,
-          evidence: workOrder.execution.evidence.map((item) => ({
-            ...item,
-            sizeBytes: item.sizeBytes.toString(),
-          })),
-          additionalItems: workOrder.execution.additionalItems.map((item) => ({
-            ...item,
-            quantity: formatQuantity(item.quantityInThousand),
-            quantityInThousand: undefined,
-            unitAmountInCents: item.unitAmountInCents.toString(),
-            totalAmountInCents: item.totalAmountInCents.toString(),
-          })),
-          additionalTotalInCents:
-            workOrder.execution.additionalTotalInCents.toString(),
-        }
-      : null,
-  };
 }

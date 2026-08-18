@@ -158,6 +158,50 @@ export class PrismaEquipmentRepository implements EquipmentRepository {
       return { status: 'SUCCESS', equipment };
     });
   }
+
+  reactivate(
+    input: Parameters<EquipmentRepository['reactivate']>[0],
+  ): Promise<EquipmentWriteResult> {
+    return this.prisma.$transaction(async (transaction) => {
+      const current = await transaction.equipment.findUnique({
+        where: {
+          organizationId_id: {
+            organizationId: input.organizationId,
+            id: input.equipmentId,
+          },
+        },
+        select: equipmentSelect,
+      });
+      if (!current) return { status: 'NOT_FOUND' };
+      if (!current.archivedAt) return { status: 'SUCCESS', equipment: current };
+      if (
+        !(await validRelation(transaction, {
+          organizationId: input.organizationId,
+          customerId: current.customerId,
+          locationId: current.locationId,
+        }))
+      ) {
+        return { status: 'RELATION_INVALID' };
+      }
+      const equipment = await transaction.equipment.update({
+        where: {
+          organizationId_id: {
+            organizationId: input.organizationId,
+            id: input.equipmentId,
+          },
+        },
+        data: { archivedAt: null },
+        select: equipmentSelect,
+      });
+      await writeAudit(
+        transaction,
+        input,
+        equipment.id,
+        'EQUIPMENT_REACTIVATED',
+      );
+      return { status: 'SUCCESS', equipment };
+    });
+  }
 }
 
 function createData(

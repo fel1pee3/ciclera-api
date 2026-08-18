@@ -103,6 +103,18 @@ export class EquipmentController {
   ): Promise<EquipmentResponseDto> {
     return this.equipment.archive(context(principal, request), equipmentId);
   }
+
+  @Post(':equipmentId/reactivate')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ type: EquipmentResponseDto })
+  reactivate(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Req() request: RequestWithId,
+    @Param('equipmentId', new ParseUUIDPipe()) equipmentId: string,
+  ): Promise<EquipmentResponseDto> {
+    return this.equipment.reactivate(context(principal, request), equipmentId);
+  }
 }
 
 function context(principal: AuthenticatedPrincipal, request: RequestWithId) {

@@ -14,6 +14,7 @@ import { accessCookieName } from '../../auth/http/auth-cookies';
 import { CurrentPrincipal } from '../../auth/http/current-principal.decorator';
 import { Roles } from '../../auth/http/roles.decorator';
 import { getRequestId, type RequestWithId } from '../../http/request-id';
+import { toTechnicianWorkOrderResponse } from '../../work-orders/http/technician-work-order.presenter';
 import { AdditionalItemsService } from '../application/additional-items.service';
 import {
   AdditionalItemInputDto,
@@ -31,51 +32,57 @@ export class AdditionalItemsController {
   @ApiOkResponse({
     description: 'Item criado e ordem com total oficial atualizado.',
   })
-  create(
+  async create(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Req() request: RequestWithId,
     @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
     @Body() input: AdditionalItemInputDto,
   ) {
-    return this.items.create(
-      principal,
-      getRequestId(request),
-      workOrderId,
-      input,
+    return toTechnicianWorkOrderResponse(
+      await this.items.create(
+        principal,
+        getRequestId(request),
+        workOrderId,
+        input,
+      ),
     );
   }
 
   @Patch(':itemId')
-  update(
+  async update(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Req() request: RequestWithId,
     @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
     @Param('itemId', new ParseUUIDPipe()) itemId: string,
     @Body() input: AdditionalItemInputDto,
   ) {
-    return this.items.update(
-      principal,
-      getRequestId(request),
-      workOrderId,
-      itemId,
-      input,
+    return toTechnicianWorkOrderResponse(
+      await this.items.update(
+        principal,
+        getRequestId(request),
+        workOrderId,
+        itemId,
+        input,
+      ),
     );
   }
 
   @Delete(':itemId')
-  remove(
+  async remove(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Req() request: RequestWithId,
     @Param('workOrderId', new ParseUUIDPipe()) workOrderId: string,
     @Param('itemId', new ParseUUIDPipe()) itemId: string,
     @Body() input: AdditionalItemVersionDto,
   ) {
-    return this.items.remove(
-      principal,
-      getRequestId(request),
-      workOrderId,
-      itemId,
-      input.version,
+    return toTechnicianWorkOrderResponse(
+      await this.items.remove(
+        principal,
+        getRequestId(request),
+        workOrderId,
+        itemId,
+        input.version,
+      ),
     );
   }
 }

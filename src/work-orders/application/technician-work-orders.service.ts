@@ -7,8 +7,6 @@ import {
   WorkOrderNotFoundError,
   WorkOrderStatusLockedError,
   WorkOrderVersionConflictError,
-  ChecklistResponseInvalidError,
-  WorkOrderExecutionIncompleteError,
 } from '../domain/work-order.errors';
 import {
   TECHNICIAN_WORK_ORDER_REPOSITORY,
@@ -82,28 +80,6 @@ export class TechnicianWorkOrdersService {
     return this.find(principal, workOrderId);
   }
 
-  async updateChecklist(
-    principal: AuthenticatedPrincipal,
-    requestId: string,
-    workOrderId: string,
-    expectedVersion: number,
-    responses: Parameters<
-      TechnicianWorkOrderRepository['updateChecklist']
-    >[0]['responses'],
-  ) {
-    resolveExecutionMutation(
-      await this.workOrders.updateChecklist({
-        organizationId: principal.organizationId,
-        technicianId: principal.userId,
-        workOrderId,
-        expectedVersion,
-        responses,
-        requestId,
-      }),
-    );
-    return this.find(principal, workOrderId);
-  }
-
   async submitForReview(
     principal: AuthenticatedPrincipal,
     requestId: string,
@@ -117,9 +93,6 @@ export class TechnicianWorkOrdersService {
       expectedVersion,
       requestId,
     });
-    if (result.status === 'INCOMPLETE') {
-      throw new WorkOrderExecutionIncompleteError(result.issues);
-    }
     resolveExecutionMutation(result);
     return this.find(principal, workOrderId);
   }
@@ -165,8 +138,5 @@ function resolveExecutionMutation(
   }
   if (result.status === 'EXECUTION_NOT_FOUND') {
     throw new WorkOrderExecutionNotFoundError();
-  }
-  if (result.status === 'INVALID_CHECKLIST_RESPONSE') {
-    throw new ChecklistResponseInvalidError();
   }
 }

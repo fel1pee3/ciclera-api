@@ -150,11 +150,6 @@ class TestTechnicianRepository implements TechnicianWorkOrderRepository {
     };
     return Promise.resolve({ status: 'SUCCESS' });
   }
-  updateChecklist(): ReturnType<
-    TechnicianWorkOrderRepository['updateChecklist']
-  > {
-    return Promise.resolve({ status: 'SUCCESS' });
-  }
   submitForReview(): ReturnType<
     TechnicianWorkOrderRepository['submitForReview']
   > {
@@ -205,7 +200,6 @@ const execution = {
   version: 1,
   startedAt: now,
   updatedAt: now,
-  checklist: null,
   evidence: [],
   additionalItems: [],
   additionalTotalInCents: 0n,

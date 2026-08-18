@@ -1,12 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import {
-  missingRequiredFieldIds,
-  type ChecklistAnswer,
-  type ChecklistSnapshot,
-} from '../../checklists/domain/checklist';
 import { PrismaService } from '../../infrastructure/database/prisma/prisma.service';
-import { executionCompletionIssues } from '../../work-orders/domain/execution-completion';
 import type { ReviewRepository } from '../application/ports/review.repository';
 
 const queueSelect = {
@@ -81,11 +75,6 @@ export class PrismaReviewRepository implements ReviewRepository {
             notes: true,
             startedAt: true,
             updatedAt: true,
-            checklistSnapshot: true,
-            checklistResponses: {
-              select: { fieldId: true, value: true },
-              orderBy: { fieldId: 'asc' },
-            },
             evidence: {
               where: { status: 'AVAILABLE' },
               select: {
@@ -127,12 +116,6 @@ export class PrismaReviewRepository implements ReviewRepository {
     });
     if (!record?.execution) return null;
     const { location, execution, ...queue } = record;
-    const snapshot =
-      execution.checklistSnapshot as unknown as ChecklistSnapshot | null;
-    const responses = execution.checklistResponses.map((item) => ({
-      fieldId: item.fieldId,
-      value: item.value as ChecklistAnswer['value'],
-    }));
     return {
       ...mapQueueItem(queue),
       description: record.description,
@@ -155,16 +138,6 @@ export class PrismaReviewRepository implements ReviewRepository {
         notes: execution.notes,
         startedAt: execution.startedAt,
         updatedAt: execution.updatedAt,
-        checklist: snapshot
-          ? {
-              snapshot,
-              responses,
-              missingRequiredFieldIds: missingRequiredFieldIds(
-                snapshot,
-                responses,
-              ),
-            }
-          : null,
         evidence: execution.evidence.map((item) => ({
           ...item,
           confirmedAt: item.confirmedAt as Date,
@@ -262,14 +235,6 @@ export class PrismaReviewRepository implements ReviewRepository {
           finalAmountInCents: true,
           execution: {
             select: {
-              checklistSnapshot: true,
-              checklistResponses: {
-                select: { fieldId: true, value: true },
-              },
-              evidence: {
-                where: { status: 'AVAILABLE' },
-                select: { kind: true },
-              },
               additionalItems: {
                 select: {
                   id: true,
@@ -298,13 +263,6 @@ export class PrismaReviewRepository implements ReviewRepository {
       if (current.version !== input.expectedVersion) {
         return { status: 'VERSION_CONFLICT' } as const;
       }
-      const issues = executionCompletionIssues({
-        checklistSnapshot: current.execution.checklistSnapshot,
-        checklistResponses: current.execution.checklistResponses,
-        evidence: current.execution.evidence,
-      });
-      if (issues.length) return { status: 'INCOMPLETE', issues } as const;
-
       const additionalTotalInCents = current.execution.additionalItems.reduce(
         (total, item) => total + item.totalAmountInCents,
         0n,

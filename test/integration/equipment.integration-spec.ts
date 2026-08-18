@@ -6,6 +6,7 @@ import { CustomersService } from '../../src/customers/application/customers.serv
 import { EquipmentService } from '../../src/equipment/application/equipment.service';
 import {
   EquipmentRelationInvalidError,
+  EquipmentNotFoundError,
   EquipmentSerialConflictError,
 } from '../../src/equipment/domain/equipment.errors';
 import { PrismaService } from '../../src/infrastructure/database/prisma/prisma.service';
@@ -226,6 +227,28 @@ describe('Equipment persistence', () => {
       archive: 'ARCHIVED',
     });
     expect(page.items.map((item) => item.id)).toContain(created.id);
+
+    await expect(
+      equipment.reactivate(
+        context(ownerB, 'cross-reactivate-equipment'),
+        created.id,
+      ),
+    ).rejects.toBeInstanceOf(EquipmentNotFoundError);
+    const reactivated = await equipment.reactivate(
+      context(ownerA, 'reactivate-equipment'),
+      created.id,
+    );
+    expect(reactivated.archivedAt).toBeNull();
+    await expect(
+      prisma.auditLog.findFirst({
+        where: {
+          organizationId: ownerA.organizationId,
+          resourceId: created.id,
+          action: 'EQUIPMENT_REACTIVATED',
+          requestId: 'reactivate-equipment',
+        },
+      }),
+    ).resolves.not.toBeNull();
   });
 });
 
