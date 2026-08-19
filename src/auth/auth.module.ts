@@ -45,6 +45,7 @@ import { StructuredPasswordResetDeliveryObserver } from './infrastructure/passwo
 import {
   DisabledPasswordResetEmailGateway,
   LocalPasswordResetEmailGateway,
+  ResendPasswordResetEmailGateway,
 } from './infrastructure/password-reset-email.gateway';
 import { PrismaModule } from '../infrastructure/database/prisma/prisma.module';
 import { readEnvironment } from '../config/environment';
@@ -126,9 +127,23 @@ import { readEnvironment } from '../config/environment';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
         const environment = readEnvironment(configService);
-        return environment.PASSWORD_RESET_DELIVERY_MODE === 'local'
-          ? new LocalPasswordResetEmailGateway(configService)
-          : new DisabledPasswordResetEmailGateway();
+
+        if (environment.PASSWORD_RESET_DELIVERY_MODE === 'local') {
+          return new LocalPasswordResetEmailGateway(configService);
+        }
+
+        if (environment.PASSWORD_RESET_DELIVERY_MODE === 'resend') {
+          if (!environment.RESEND_API_KEY || !environment.EMAIL_FROM) {
+            throw new Error('Resend email configuration is unavailable.');
+          }
+
+          return new ResendPasswordResetEmailGateway(
+            environment.RESEND_API_KEY,
+            environment.EMAIL_FROM,
+          );
+        }
+
+        return new DisabledPasswordResetEmailGateway();
       },
     },
     {

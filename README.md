@@ -239,7 +239,7 @@ npm run start:prod
 
 Manter um `.env.example` versionado e uma validação executada antes da aplicação iniciar.
 
-As variáveis da fundação HTTP, da infraestrutura PostgreSQL, do Prisma, da autenticação e da recuperação de senha presentes em `.env.example` estão ativas. Storage e provedor externo de e-mail continuam reservados aos checkpoints correspondentes.
+As variáveis da fundação HTTP, da infraestrutura PostgreSQL, do Prisma, da autenticação e da recuperação de senha presentes em `.env.example` estão ativas. Em produção, evidências usam Supabase Storage, o rate limiter usa Upstash e a recuperação de senha pode usar Resend.
 
 ### Aplicação e banco
 
@@ -271,7 +271,7 @@ As variáveis da fundação HTTP, da infraestrutura PostgreSQL, do Prisma, da au
 | `ACCESS_TOKEN_TTL`             |         Sim | Validade do access token em segundos, entre 60 e 3600                                                                 |
 | `REFRESH_TOKEN_TTL`            |         Sim | Validade da sessão renovável em segundos, entre uma hora e 90 dias                                                    |
 | `PASSWORD_RESET_TOKEN_TTL`     |         Não | Validade do token de redefinição em segundos, entre 5 minutos e 24 horas; padrão `1800`                               |
-| `PASSWORD_RESET_DELIVERY_MODE` |         Não | `local` em desenvolvimento/teste ou `disabled`; produção proíbe `local` e usa `disabled` enquanto não houver provedor |
+| `PASSWORD_RESET_DELIVERY_MODE` |         Não | `local`, `disabled` ou `resend`; produção proíbe `local`                                                      |
 | `AUTH_COOKIE_SAME_SITE`        |         Não | `strict`, `lax` ou `none`; padrão `strict`; `none` é permitido somente com cookies Secure em produção                 |
 
 Os cookies são host-only e `HttpOnly`. `Secure` é derivado de
@@ -311,14 +311,15 @@ distribuído estiver indisponível.
 
 | Variável                 |          Obrigatória | Finalidade              |
 | ------------------------ | -------------------: | ----------------------- |
-| `EMAIL_PROVIDER_API_KEY` | Ao habilitar e-mails | Credencial do provedor  |
-| `EMAIL_FROM`             | Ao habilitar e-mails | Remetente transacional  |
-| `EMAIL_REPLY_TO`         |                  Não | Endereço para respostas |
+| `RESEND_API_KEY` | Ao usar Resend | Chave server-side criada no Resend; nunca exposta à web ou aos logs |
+| `EMAIL_FROM`     | Ao usar Resend | Remetente transacional de um domínio verificado no Resend           |
 
 O adapter `local` escreve o link de redefinição somente no terminal da API em
 `development`, sem registrar o e-mail em texto aberto. Em `test`, a entrega local
 não escreve o token; os testes usam um gateway controlado. Em produção, o modo
-local é recusado no bootstrap. Enquanto não houver provedor transacional, o modo
+local é recusado no bootstrap. O adapter `resend` envia HTML e texto simples pelo
+SDK oficial e transforma qualquer rejeição do provedor em falha interna de
+entrega; o token recém-criado é invalidado sem expor o motivo ao cliente. O modo
 `disabled` faz todas as solicitações falharem com `503`, sem consultar a conta e
 sem produzir sucesso falso.
 

@@ -6,6 +6,7 @@ A topologia aprovada para o primeiro ambiente é:
 - Railway Hobby: `ciclera-api`.
 - Supabase Free: PostgreSQL e bucket privado de evidências.
 - Upstash Free: Redis compartilhado para rate limiting.
+- Resend: e-mail transacional de recuperação de senha.
 
 Este documento não contém credenciais. Secrets devem ser colados diretamente no
 painel do Railway e nunca enviados por chat, commit, log ou screenshot.
@@ -38,7 +39,23 @@ O adapter usa um script Lua atômico por chave. Uma falha do Upstash não libera
 silenciosamente endpoints protegidos; a requisição falha em vez de ignorar o
 limite.
 
-### 3. Railway
+### 3. Resend
+
+1. Adicionar um subdomínio exclusivo de envio, por exemplo
+   `mail.ciclera.com.br`, no painel do Resend.
+2. Publicar no provedor DNS exatamente os registros SPF e DKIM fornecidos e
+   aguardar o status `verified`.
+3. Criar uma API key com permissão apenas de envio.
+4. Cadastrar somente no Railway:
+   `PASSWORD_RESET_DELIVERY_MODE=resend`, `RESEND_API_KEY` e `EMAIL_FROM`.
+5. Usar um remetente pertencente ao domínio verificado, por exemplo
+   `Ciclera <nao-responda@mail.ciclera.com.br>`.
+
+A chave do Resend é exclusiva da API e nunca deve ser cadastrada na Vercel. O
+modo `onboarding@resend.dev` serve apenas para teste restrito da conta e não
+substitui a verificação do domínio de produção.
+
+### 4. Railway
 
 1. Criar um projeto Hobby e conectar o repositório `ciclera-api`, branch `main`.
 2. Não adicionar PostgreSQL, Redis ou volume no Railway para esta topologia.
@@ -57,7 +74,7 @@ O deploy executa:
 A API escuta em `0.0.0.0` e respeita um proxy confiável por padrão em produção.
 Não aumentar `TRUST_PROXY_HOPS` sem revisar a topologia do Railway.
 
-### 4. Vercel
+### 5. Vercel
 
 Depois que a URL final da API existir:
 
@@ -80,11 +97,12 @@ Com `NODE_ENV=production`, o bootstrap falha se:
 - o rate limiter não for `upstash` ou suas credenciais estiverem ausentes;
 - `WEB_URL` ou alguma origem CORS não usar HTTPS;
 - o modo local de recuperação de senha estiver ativo;
+- o modo `resend` estiver ativo sem `RESEND_API_KEY` ou `EMAIL_FROM` válido;
 - `SameSite=None` for tentado fora de produção.
 
-O cadastro público permanece desabilitado no primeiro deploy. A recuperação de
-senha também permanece indisponível com resposta `503` até a etapa do Resend ser
-implementada; não existe sucesso falso.
+O modo `disabled` permanece disponível para desligar globalmente a recuperação
+de senha com resposta `503`. No modo `resend`, uma rejeição do provedor invalida
+o token recém-criado e não produz sucesso falso nem expõe detalhes ao cliente.
 
 ## Validação após o primeiro deploy
 

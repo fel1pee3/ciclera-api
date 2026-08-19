@@ -35,7 +35,11 @@ const rawEnvironmentSchema = z.object({
     .min(300)
     .max(24 * 60 * 60)
     .default(1_800),
-  PASSWORD_RESET_DELIVERY_MODE: z.enum(['local', 'disabled']).optional(),
+  PASSWORD_RESET_DELIVERY_MODE: z
+    .enum(['local', 'disabled', 'resend'])
+    .optional(),
+  RESEND_API_KEY: z.string().min(20).max(4_096).optional(),
+  EMAIL_FROM: z.string().min(3).max(320).optional(),
   PUBLIC_REGISTRATION_ENABLED: z.enum(['true', 'false']).default('false'),
   AUTH_COOKIE_SAME_SITE: z.enum(['strict', 'lax', 'none']).default('strict'),
   EVIDENCE_STORAGE_DRIVER: z.enum(['local', 'supabase']).default('local'),
@@ -84,7 +88,9 @@ export interface EnvironmentVariables {
   ACCESS_TOKEN_TTL: number;
   REFRESH_TOKEN_TTL: number;
   PASSWORD_RESET_TOKEN_TTL: number;
-  PASSWORD_RESET_DELIVERY_MODE: 'local' | 'disabled';
+  PASSWORD_RESET_DELIVERY_MODE: 'local' | 'disabled' | 'resend';
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
   PUBLIC_REGISTRATION_ENABLED: boolean;
   AUTH_COOKIE_SAME_SITE: 'strict' | 'lax' | 'none';
   EVIDENCE_STORAGE_DRIVER: 'local' | 'supabase';
@@ -156,6 +162,19 @@ export function validateEnvironment(
     issues.push(
       'PASSWORD_RESET_DELIVERY_MODE: local delivery is forbidden in production',
     );
+  }
+
+  if (passwordResetDeliveryMode === 'resend') {
+    if (!data.RESEND_API_KEY) {
+      issues.push('RESEND_API_KEY: is required');
+    }
+    if (!data.EMAIL_FROM) {
+      issues.push('EMAIL_FROM: is required');
+    } else if (!isValidEmailSender(data.EMAIL_FROM)) {
+      issues.push(
+        'EMAIL_FROM: must be an email address or a name followed by an email address in angle brackets',
+      );
+    }
   }
 
   if (data.AUTH_COOKIE_SAME_SITE === 'none' && data.NODE_ENV !== 'production') {
@@ -237,6 +256,8 @@ export function validateEnvironment(
     REFRESH_TOKEN_TTL: data.REFRESH_TOKEN_TTL,
     PASSWORD_RESET_TOKEN_TTL: data.PASSWORD_RESET_TOKEN_TTL,
     PASSWORD_RESET_DELIVERY_MODE: passwordResetDeliveryMode,
+    RESEND_API_KEY: data.RESEND_API_KEY,
+    EMAIL_FROM: data.EMAIL_FROM,
     PUBLIC_REGISTRATION_ENABLED: data.PUBLIC_REGISTRATION_ENABLED === 'true',
     AUTH_COOKIE_SAME_SITE: data.AUTH_COOKIE_SAME_SITE,
     EVIDENCE_STORAGE_DRIVER: data.EVIDENCE_STORAGE_DRIVER,
@@ -280,8 +301,10 @@ export function readEnvironment(
       'PASSWORD_RESET_TOKEN_TTL',
     ),
     PASSWORD_RESET_DELIVERY_MODE: configService.getOrThrow<
-      'local' | 'disabled'
+      'local' | 'disabled' | 'resend'
     >('PASSWORD_RESET_DELIVERY_MODE'),
+    RESEND_API_KEY: configService.get<string>('RESEND_API_KEY'),
+    EMAIL_FROM: configService.get<string>('EMAIL_FROM'),
     PUBLIC_REGISTRATION_ENABLED: configService.getOrThrow<boolean>(
       'PUBLIC_REGISTRATION_ENABLED',
     ),
@@ -343,6 +366,15 @@ function isPostgresUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function isValidEmailSender(value: string): boolean {
+  const normalized = value.trim();
+  const address = normalized.endsWith('>')
+    ? normalized.slice(normalized.lastIndexOf('<') + 1, -1)
+    : normalized;
+
+  return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(address);
 }
 
 function validateTestDatabaseIsolation(

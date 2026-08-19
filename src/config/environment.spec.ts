@@ -113,6 +113,44 @@ describe('validateEnvironment', () => {
     expect(environment.AUTH_COOKIE_SAME_SITE).toBe('none');
   });
 
+  it('requires and validates the Resend configuration when selected', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        PASSWORD_RESET_DELIVERY_MODE: 'resend',
+      }),
+    ).toThrow(/RESEND_API_KEY.*EMAIL_FROM/);
+
+    const environment = validateEnvironment({
+      ...validEnvironment,
+      PASSWORD_RESET_DELIVERY_MODE: 'resend',
+      RESEND_API_KEY: 're_test_only_key_with_enough_characters',
+      EMAIL_FROM: 'Ciclera <nao-responda@mail.ciclera.example>',
+    });
+
+    expect(environment.PASSWORD_RESET_DELIVERY_MODE).toBe('resend');
+    expect(environment.EMAIL_FROM).toBe(
+      'Ciclera <nao-responda@mail.ciclera.example>',
+    );
+  });
+
+  it('rejects an invalid Resend sender without exposing the API key', () => {
+    const apiKey = 're_secret_value_that_must_not_be_exposed';
+
+    try {
+      validateEnvironment({
+        ...validEnvironment,
+        PASSWORD_RESET_DELIVERY_MODE: 'resend',
+        RESEND_API_KEY: apiKey,
+        EMAIL_FROM: 'invalid-sender',
+      });
+      throw new Error('Expected environment validation to fail.');
+    } catch (error) {
+      expect((error as Error).message).toMatch(/EMAIL_FROM/);
+      expect((error as Error).message).not.toContain(apiKey);
+    }
+  });
+
   it('requires every credential selected by a production driver', () => {
     expect(() =>
       validateEnvironment({
