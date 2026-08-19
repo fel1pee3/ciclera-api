@@ -11,7 +11,9 @@ export class DatabaseHealthService implements OnApplicationShutdown {
     const environment = readEnvironment(configService);
 
     this.pool = new Pool({
-      connectionString: getRuntimeDatabaseUrl(environment),
+      connectionString: normalizeNodePostgresConnectionString(
+        getRuntimeDatabaseUrl(environment),
+      ),
       connectionTimeoutMillis: 2_000,
       idleTimeoutMillis: 30_000,
       max: 2,
@@ -32,4 +34,19 @@ export class DatabaseHealthService implements OnApplicationShutdown {
   async onApplicationShutdown(): Promise<void> {
     await this.pool.end();
   }
+}
+
+export function normalizeNodePostgresConnectionString(
+  connectionString: string,
+): string {
+  const url = new URL(connectionString);
+
+  if (
+    url.searchParams.get('sslmode') === 'require' &&
+    !url.searchParams.has('uselibpqcompat')
+  ) {
+    url.searchParams.set('uselibpqcompat', 'true');
+  }
+
+  return url.toString();
 }
