@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { AdditionalItemsModule } from './additional-items/additional-items.module';
@@ -19,6 +19,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { HistoryModule } from './history/history.module';
 import { ReportsModule } from './reports/reports.module';
 import { ImportsModule } from './imports/imports.module';
+import { UpstashThrottlerStorage } from './infrastructure/rate-limit/upstash-throttler-storage';
 
 @Module({
   imports: [
@@ -27,15 +28,27 @@ import { ImportsModule } from './imports/imports.module';
       isGlobal: true,
       validate: validateEnvironment,
     }),
-    ThrottlerModule.forRoot([
-      { name: 'ip', limit: 100, ttl: 60_000 },
-      {
-        name: 'identifier',
-        limit: 100,
-        ttl: 60_000,
-        getTracker: authIdentifierTracker,
-      },
-    ]),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        storage:
+          config.getOrThrow<'memory' | 'upstash'>(
+            'RATE_LIMIT_STORAGE_DRIVER',
+          ) === 'upstash'
+            ? new UpstashThrottlerStorage(config)
+            : undefined,
+        throttlers: [
+          { name: 'ip', limit: 100, ttl: 60_000 },
+          {
+            name: 'identifier',
+            limit: 100,
+            ttl: 60_000,
+            getTracker: authIdentifierTracker,
+          },
+        ],
+      }),
+    }),
     PrismaModule,
     AdditionalItemsModule,
     AuthModule,

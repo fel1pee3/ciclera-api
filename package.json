@@ -45,6 +45,8 @@
     "@nestjs/swagger": "^11.4.6",
     "@nestjs/throttler": "6.5.0",
     "@prisma/client": "6.19.3",
+    "@supabase/supabase-js": "^2.112.3",
+    "@upstash/redis": "^1.38.2",
     "argon2": "0.45.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",

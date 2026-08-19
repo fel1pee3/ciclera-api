@@ -258,6 +258,7 @@ As variáveis da fundação HTTP, da infraestrutura PostgreSQL, do Prisma, da au
 | `CORS_ORIGINS`                |             Em produção | Origens HTTP(S) explícitas, separadas por vírgula; usa `WEB_URL` localmente quando omitida  |
 | `HTTP_BODY_LIMIT`             |                     Não | Limite dos corpos JSON e URL-encoded; padrão `100kb`                                        |
 | `LOG_LEVEL`                   |                     Não | `debug`, `info`, `warn` ou `error`; padrão `info`                                           |
+| `TRUST_PROXY_HOPS`            |                     Não | Proxies confiáveis antes da API; padrão `0` local e `1` em produção                         |
 | `PUBLIC_REGISTRATION_ENABLED` |                     Não | Habilita explicitamente o cadastro público; padrão seguro `false`                           |
 
 ### Autenticação
@@ -271,24 +272,40 @@ As variáveis da fundação HTTP, da infraestrutura PostgreSQL, do Prisma, da au
 | `REFRESH_TOKEN_TTL`            |         Sim | Validade da sessão renovável em segundos, entre uma hora e 90 dias                                                    |
 | `PASSWORD_RESET_TOKEN_TTL`     |         Não | Validade do token de redefinição em segundos, entre 5 minutos e 24 horas; padrão `1800`                               |
 | `PASSWORD_RESET_DELIVERY_MODE` |         Não | `local` em desenvolvimento/teste ou `disabled`; produção proíbe `local` e usa `disabled` enquanto não houver provedor |
+| `AUTH_COOKIE_SAME_SITE`        |         Não | `strict`, `lax` ou `none`; padrão `strict`; `none` é permitido somente com cookies Secure em produção                 |
 
-Os cookies são host-only, `HttpOnly` e `SameSite=Strict`. `Secure` é derivado de `NODE_ENV=production`, sem uma variável que possa enfraquecê-lo acidentalmente. O access cookie usa `Path=/`; o refresh cookie usa `Path=/api/v1/auth`.
+Os cookies são host-only e `HttpOnly`. `Secure` é derivado de
+`NODE_ENV=production`, sem uma variável que possa enfraquecê-lo acidentalmente.
+`SameSite=Strict` permanece o padrão e é recomendado com
+`app.ciclera.com.br`/`api.ciclera.com.br`; `SameSite=None` existe apenas para uma
+transição HTTPS cross-site e continua sujeito ao bloqueio de cookies de terceiros.
+O access cookie usa `Path=/`; o refresh cookie usa `Path=/api/v1/auth`.
 
 ### Storage
 
-| Variável                         |             Obrigatória | Finalidade                                               |
-| -------------------------------- | ----------------------: | -------------------------------------------------------- |
-| `STORAGE_ENDPOINT`               |       Conforme provedor | Endpoint do object storage                               |
-| `STORAGE_REGION`                 |       Conforme provedor | Região do bucket                                         |
-| `STORAGE_BUCKET`                 | Ao habilitar evidências | Bucket privado                                           |
-| `STORAGE_ACCESS_KEY_ID`          | Ao habilitar evidências | Credencial de acesso                                     |
-| `STORAGE_SECRET_ACCESS_KEY`      | Ao habilitar evidências | Credencial secreta                                       |
-| `STORAGE_FORCE_PATH_STYLE`       |       Conforme provedor | Compatibilidade com storage S3-like local                |
-| `UPLOAD_MAX_FILE_SIZE_BYTES`     |                     Sim | Limite server-side por arquivo                           |
-| `UPLOAD_ALLOWED_MIME_TYPES`      |                     Sim | Tipos MIME aceitos                                       |
-| `UPLOAD_MAX_FILES_PER_EXECUTION` |                     Sim | Quantidade máxima de evidências por execução             |
-| `EVIDENCE_URL_TTL`               |                     Sim | Validade das capacidades temporárias de upload e leitura |
-| `EVIDENCE_STORAGE_ROOT`          |         Desenvolvimento | Diretório local privado do adapter de desenvolvimento    |
+| Variável                         |      Obrigatória | Finalidade                                               |
+| -------------------------------- | ---------------: | -------------------------------------------------------- |
+| `EVIDENCE_STORAGE_DRIVER`        |              Sim | `local` em desenvolvimento ou `supabase` em produção     |
+| `SUPABASE_URL`                   | Ao usar Supabase | URL HTTPS do projeto; variável exclusiva da API          |
+| `SUPABASE_SECRET_KEY`            | Ao usar Supabase | Secret key server-side; nunca exposta à web              |
+| `SUPABASE_STORAGE_BUCKET`        | Ao usar Supabase | Bucket privado, por padrão `ciclera-evidencias`          |
+| `UPLOAD_MAX_FILE_SIZE_BYTES`     |              Sim | Limite server-side por arquivo                           |
+| `UPLOAD_ALLOWED_MIME_TYPES`      |              Sim | Tipos MIME aceitos                                       |
+| `UPLOAD_MAX_FILES_PER_EXECUTION` |              Sim | Quantidade máxima de evidências por execução             |
+| `EVIDENCE_URL_TTL`               |              Sim | Validade das capacidades temporárias de upload e leitura |
+| `EVIDENCE_STORAGE_ROOT`          |  Desenvolvimento | Diretório local privado do adapter de desenvolvimento    |
+
+### Rate limiting
+
+| Variável                    |     Obrigatória | Finalidade                                                        |
+| --------------------------- | --------------: | ----------------------------------------------------------------- |
+| `RATE_LIMIT_STORAGE_DRIVER` |             Sim | `memory` local ou `upstash` em produção                           |
+| `UPSTASH_REDIS_REST_URL`    | Ao usar Upstash | Endpoint HTTPS da base Redis                                      |
+| `UPSTASH_REDIS_REST_TOKEN`  | Ao usar Upstash | Token REST server-side; nunca exposto à web ou registrado em logs |
+
+O adapter Upstash executa uma operação Lua atômica por chave. Produção não
+aceita o limitador em memória e não possui fallback silencioso se o serviço
+distribuído estiver indisponível.
 
 ### E-mail
 
@@ -336,7 +353,9 @@ WEB_URL=http://localhost:3000
 CORS_ORIGINS=http://localhost:3000
 HTTP_BODY_LIMIT=100kb
 LOG_LEVEL=info
+TRUST_PROXY_HOPS=0
 PUBLIC_REGISTRATION_ENABLED=true
+AUTH_COOKIE_SAME_SITE=strict
 
 JWT_ACCESS_SECRET=replace-with-at-least-32-characters-local-only
 JWT_ACCESS_ISSUER=ciclera-api-local
@@ -353,6 +372,10 @@ POSTGRES_PORT=55432
 
 DATABASE_URL=postgresql://ciclera_local:replace-with-a-local-only-password@localhost:55432/ciclera
 ```
+
+O contrato seguro para Railway está em [`.env.production.example`](.env.production.example)
+e o procedimento por provedor em
+[`docs/PRODUCTION_DEPLOYMENT.md`](docs/PRODUCTION_DEPLOYMENT.md).
 
 Regras:
 
@@ -1739,7 +1762,10 @@ Nunca enviar senha, token, cookie, documento completo, evidência ou payload sen
 - Definir retenção de backups e evidências.
 - Separar ambientes de desenvolvimento, teste e produção.
 
-Provedor específico deve ser documentado somente após escolha real.
+Para o primeiro ambiente, foram escolhidos Railway para a API, Supabase para
+PostgreSQL e evidências privadas, Upstash para o rate limiter distribuído e
+Vercel para a web. O procedimento está em
+[`docs/PRODUCTION_DEPLOYMENT.md`](docs/PRODUCTION_DEPLOYMENT.md).
 
 O procedimento provider-neutral e os critérios de evidência para staging estão
 em [`docs/STAGING_RUNBOOK.md`](docs/STAGING_RUNBOOK.md).
@@ -1747,11 +1773,11 @@ O roteiro controlado do UAT está em
 [`docs/PILOT_UAT_RUNBOOK.md`](docs/PILOT_UAT_RUNBOOK.md) e só deve ser executado
 depois da aprovação do staging.
 
-O bootstrap falha fechado com `NODE_ENV=production` enquanto os únicos adapters
-disponíveis forem `EVIDENCE_STORAGE_DRIVER=local` e
-`RATE_LIMIT_STORAGE_DRIVER=memory`. Um deploy real precisa fornecer object
-storage privado e rate limiter compartilhado; não existe fallback silencioso
-para filesystem efêmero ou limite por processo.
+O bootstrap falha fechado com `NODE_ENV=production` se
+`EVIDENCE_STORAGE_DRIVER` não for `supabase`, se
+`RATE_LIMIT_STORAGE_DRIVER` não for `upstash` ou se faltar qualquer credencial
+exigida pelo driver selecionado. Não existe fallback silencioso para filesystem
+efêmero ou limite por processo.
 
 ## Ordem recomendada de implementação
 

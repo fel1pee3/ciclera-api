@@ -4,17 +4,18 @@ Este runbook prepara o CP-44 sem escolher provedor nem registrar credenciais. O
 checkpoint continua pendente até existir infraestrutura real e os testes serem
 executados contra ela.
 
-## Bloqueios atuais
+## Estado atual
 
-- A API possui somente filesystem local para evidências. Esse adapter é
-  deliberadamente rejeitado com `NODE_ENV=production`.
-- O rate limiter disponível é por processo e também é rejeitado em produção.
-- O envio real de recuperação de senha não possui gateway de produção.
-- Não foram fornecidos domínio, banco, object storage, serviço de e-mail,
-  observabilidade ou credenciais de staging.
+- Supabase Storage está disponível como adapter privado de produção; o adapter
+  local continua restrito a desenvolvimento e testes.
+- Upstash Redis está disponível como rate limiter compartilhado; o limitador em
+  memória continua restrito a desenvolvimento e testes.
+- O envio real de recuperação de senha ainda não possui gateway de produção.
+- Domínio, banco, bucket, Redis, e-mail, observabilidade e credenciais ainda
+  precisam ser provisionados no ambiente real.
 
-Não remover essas falhas fechadas para viabilizar um deploy. O CP-44 exige
-adapters privados e compartilhados, com contrato equivalente às portas atuais.
+Não enfraquecer as falhas fechadas para viabilizar um deploy. O bootstrap exige
+os drivers Supabase e Upstash e todas as suas credenciais em produção.
 
 ## Topologia mínima
 
@@ -28,10 +29,9 @@ adapters privados e compartilhados, com contrato equivalente às portas atuais.
 
 ## Variáveis
 
-Na API, configurar todos os campos de `.env.example`, com `NODE_ENV=production`,
-URLs HTTPS reais, allowlist CORS exata, secrets novos e credenciais exclusivas.
-Substituir os drivers locais somente depois que os respectivos adapters forem
-implementados e testados. Na web, definir `NEXT_PUBLIC_APP_URL`,
+Na API, cadastrar os campos de `.env.production.example` diretamente no ambiente
+protegido, com URLs HTTPS reais, allowlist CORS exata, secrets novos e
+credenciais exclusivas. Na web, definir `NEXT_PUBLIC_APP_URL`,
 `NEXT_PUBLIC_API_URL`, contatos públicos e `LEAD_WEBHOOK_URL` privado no ambiente
 server-side.
 

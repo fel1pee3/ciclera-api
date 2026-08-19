@@ -15,7 +15,7 @@ async function bootstrap() {
   const environment = readEnvironment(app.get(ConfigService));
 
   configureApplication(app, environment);
-  await app.listen(environment.PORT);
+  await app.listen(environment.PORT, '0.0.0.0');
 
   app.get(StructuredLoggerService).log('application.started', {
     environment: environment.NODE_ENV,

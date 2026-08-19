@@ -19,6 +19,7 @@ const rawEnvironmentSchema = z.object({
     .regex(/^\d+(?:kb|mb)$/i, 'must use a value such as 100kb or 1mb')
     .default('100kb'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).optional(),
   JWT_ACCESS_SECRET: z.string().min(32).max(4_096),
   JWT_ACCESS_ISSUER: z.string().min(3).max(200),
   JWT_ACCESS_AUDIENCE: z.string().min(3).max(200),
@@ -36,8 +37,12 @@ const rawEnvironmentSchema = z.object({
     .default(1_800),
   PASSWORD_RESET_DELIVERY_MODE: z.enum(['local', 'disabled']).optional(),
   PUBLIC_REGISTRATION_ENABLED: z.enum(['true', 'false']).default('false'),
-  EVIDENCE_STORAGE_DRIVER: z.literal('local').default('local'),
+  AUTH_COOKIE_SAME_SITE: z.enum(['strict', 'lax', 'none']).default('strict'),
+  EVIDENCE_STORAGE_DRIVER: z.enum(['local', 'supabase']).default('local'),
   EVIDENCE_STORAGE_ROOT: z.string().min(1).default('.local/evidence'),
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SECRET_KEY: z.string().min(20).max(4_096).optional(),
+  SUPABASE_STORAGE_BUCKET: z.string().min(3).max(63).optional(),
   UPLOAD_MAX_FILE_SIZE_BYTES: z.coerce
     .number()
     .int()
@@ -55,7 +60,9 @@ const rawEnvironmentSchema = z.object({
     .max(50)
     .default(20),
   EVIDENCE_URL_TTL: z.coerce.number().int().min(60).max(900).default(300),
-  RATE_LIMIT_STORAGE_DRIVER: z.literal('memory').default('memory'),
+  RATE_LIMIT_STORAGE_DRIVER: z.enum(['memory', 'upstash']).default('memory'),
+  UPSTASH_REDIS_REST_URL: z.string().url().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().min(20).max(4_096).optional(),
 });
 
 export type NodeEnvironment = 'development' | 'test' | 'production';
@@ -70,6 +77,7 @@ export interface EnvironmentVariables {
   CORS_ORIGINS: string[];
   HTTP_BODY_LIMIT: string;
   LOG_LEVEL: ApplicationLogLevel;
+  TRUST_PROXY_HOPS: number;
   JWT_ACCESS_SECRET: string;
   JWT_ACCESS_ISSUER: string;
   JWT_ACCESS_AUDIENCE: string;
@@ -78,13 +86,19 @@ export interface EnvironmentVariables {
   PASSWORD_RESET_TOKEN_TTL: number;
   PASSWORD_RESET_DELIVERY_MODE: 'local' | 'disabled';
   PUBLIC_REGISTRATION_ENABLED: boolean;
-  EVIDENCE_STORAGE_DRIVER: 'local';
+  AUTH_COOKIE_SAME_SITE: 'strict' | 'lax' | 'none';
+  EVIDENCE_STORAGE_DRIVER: 'local' | 'supabase';
   EVIDENCE_STORAGE_ROOT: string;
+  SUPABASE_URL?: string;
+  SUPABASE_SECRET_KEY?: string;
+  SUPABASE_STORAGE_BUCKET?: string;
   UPLOAD_MAX_FILE_SIZE_BYTES: number;
   UPLOAD_ALLOWED_MIME_TYPES: string[];
   UPLOAD_MAX_FILES_PER_EXECUTION: number;
   EVIDENCE_URL_TTL: number;
-  RATE_LIMIT_STORAGE_DRIVER: 'memory';
+  RATE_LIMIT_STORAGE_DRIVER: 'memory' | 'upstash';
+  UPSTASH_REDIS_REST_URL?: string;
+  UPSTASH_REDIS_REST_TOKEN?: string;
 }
 
 export function validateEnvironment(
@@ -129,16 +143,75 @@ export function validateEnvironment(
     data.PASSWORD_RESET_DELIVERY_MODE ??
     (data.NODE_ENV === 'production' ? 'disabled' : 'local');
 
+  if (data.NODE_ENV === 'production') {
+    if (!webUrl.startsWith('https://')) {
+      issues.push('WEB_URL: production requires https');
+    }
+    if (corsOrigins.some((origin) => !origin.startsWith('https://'))) {
+      issues.push('CORS_ORIGINS: production requires https origins');
+    }
+  }
+
   if (data.NODE_ENV === 'production' && passwordResetDeliveryMode === 'local') {
     issues.push(
       'PASSWORD_RESET_DELIVERY_MODE: local delivery is forbidden in production',
     );
   }
 
-  if (data.NODE_ENV === 'production') {
+  if (data.AUTH_COOKIE_SAME_SITE === 'none' && data.NODE_ENV !== 'production') {
     issues.push(
-      'EVIDENCE_STORAGE_DRIVER: local storage is forbidden in production',
-      'RATE_LIMIT_STORAGE_DRIVER: in-memory rate limiting is forbidden in production',
+      'AUTH_COOKIE_SAME_SITE: none is allowed only in production because it requires Secure cookies',
+    );
+  }
+
+  if (data.EVIDENCE_STORAGE_DRIVER === 'supabase') {
+    if (!data.SUPABASE_URL) issues.push('SUPABASE_URL: is required');
+    if (!data.SUPABASE_SECRET_KEY) {
+      issues.push('SUPABASE_SECRET_KEY: is required');
+    }
+    if (!data.SUPABASE_STORAGE_BUCKET) {
+      issues.push('SUPABASE_STORAGE_BUCKET: is required');
+    }
+    if (
+      data.NODE_ENV === 'production' &&
+      data.SUPABASE_URL &&
+      !data.SUPABASE_URL.startsWith('https://')
+    ) {
+      issues.push('SUPABASE_URL: production requires https');
+    }
+  }
+
+  if (data.RATE_LIMIT_STORAGE_DRIVER === 'upstash') {
+    if (!data.UPSTASH_REDIS_REST_URL) {
+      issues.push('UPSTASH_REDIS_REST_URL: is required');
+    }
+    if (!data.UPSTASH_REDIS_REST_TOKEN) {
+      issues.push('UPSTASH_REDIS_REST_TOKEN: is required');
+    }
+    if (
+      data.NODE_ENV === 'production' &&
+      data.UPSTASH_REDIS_REST_URL &&
+      !data.UPSTASH_REDIS_REST_URL.startsWith('https://')
+    ) {
+      issues.push('UPSTASH_REDIS_REST_URL: production requires https');
+    }
+  }
+
+  if (
+    data.NODE_ENV === 'production' &&
+    data.EVIDENCE_STORAGE_DRIVER !== 'supabase'
+  ) {
+    issues.push(
+      'EVIDENCE_STORAGE_DRIVER: production requires supabase storage',
+    );
+  }
+
+  if (
+    data.NODE_ENV === 'production' &&
+    data.RATE_LIMIT_STORAGE_DRIVER !== 'upstash'
+  ) {
+    issues.push(
+      'RATE_LIMIT_STORAGE_DRIVER: production requires upstash rate limiting',
     );
   }
 
@@ -155,6 +228,8 @@ export function validateEnvironment(
     CORS_ORIGINS: corsOrigins,
     HTTP_BODY_LIMIT: data.HTTP_BODY_LIMIT.toLowerCase(),
     LOG_LEVEL: data.LOG_LEVEL,
+    TRUST_PROXY_HOPS:
+      data.TRUST_PROXY_HOPS ?? (data.NODE_ENV === 'production' ? 1 : 0),
     JWT_ACCESS_SECRET: data.JWT_ACCESS_SECRET,
     JWT_ACCESS_ISSUER: data.JWT_ACCESS_ISSUER,
     JWT_ACCESS_AUDIENCE: data.JWT_ACCESS_AUDIENCE,
@@ -163,8 +238,12 @@ export function validateEnvironment(
     PASSWORD_RESET_TOKEN_TTL: data.PASSWORD_RESET_TOKEN_TTL,
     PASSWORD_RESET_DELIVERY_MODE: passwordResetDeliveryMode,
     PUBLIC_REGISTRATION_ENABLED: data.PUBLIC_REGISTRATION_ENABLED === 'true',
+    AUTH_COOKIE_SAME_SITE: data.AUTH_COOKIE_SAME_SITE,
     EVIDENCE_STORAGE_DRIVER: data.EVIDENCE_STORAGE_DRIVER,
     EVIDENCE_STORAGE_ROOT: data.EVIDENCE_STORAGE_ROOT,
+    SUPABASE_URL: data.SUPABASE_URL,
+    SUPABASE_SECRET_KEY: data.SUPABASE_SECRET_KEY,
+    SUPABASE_STORAGE_BUCKET: data.SUPABASE_STORAGE_BUCKET,
     UPLOAD_MAX_FILE_SIZE_BYTES: data.UPLOAD_MAX_FILE_SIZE_BYTES,
     UPLOAD_ALLOWED_MIME_TYPES: data.UPLOAD_ALLOWED_MIME_TYPES.split(',')
       .map((value) => value.trim().toLowerCase())
@@ -172,6 +251,8 @@ export function validateEnvironment(
     UPLOAD_MAX_FILES_PER_EXECUTION: data.UPLOAD_MAX_FILES_PER_EXECUTION,
     EVIDENCE_URL_TTL: data.EVIDENCE_URL_TTL,
     RATE_LIMIT_STORAGE_DRIVER: data.RATE_LIMIT_STORAGE_DRIVER,
+    UPSTASH_REDIS_REST_URL: data.UPSTASH_REDIS_REST_URL,
+    UPSTASH_REDIS_REST_TOKEN: data.UPSTASH_REDIS_REST_TOKEN,
   };
 }
 
@@ -187,6 +268,7 @@ export function readEnvironment(
     CORS_ORIGINS: configService.getOrThrow<string[]>('CORS_ORIGINS'),
     HTTP_BODY_LIMIT: configService.getOrThrow<string>('HTTP_BODY_LIMIT'),
     LOG_LEVEL: configService.getOrThrow<ApplicationLogLevel>('LOG_LEVEL'),
+    TRUST_PROXY_HOPS: configService.getOrThrow<number>('TRUST_PROXY_HOPS'),
     JWT_ACCESS_SECRET: configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
     JWT_ACCESS_ISSUER: configService.getOrThrow<string>('JWT_ACCESS_ISSUER'),
     JWT_ACCESS_AUDIENCE: configService.getOrThrow<string>(
@@ -203,11 +285,19 @@ export function readEnvironment(
     PUBLIC_REGISTRATION_ENABLED: configService.getOrThrow<boolean>(
       'PUBLIC_REGISTRATION_ENABLED',
     ),
-    EVIDENCE_STORAGE_DRIVER: configService.getOrThrow<'local'>(
+    AUTH_COOKIE_SAME_SITE: configService.getOrThrow<'strict' | 'lax' | 'none'>(
+      'AUTH_COOKIE_SAME_SITE',
+    ),
+    EVIDENCE_STORAGE_DRIVER: configService.getOrThrow<'local' | 'supabase'>(
       'EVIDENCE_STORAGE_DRIVER',
     ),
     EVIDENCE_STORAGE_ROOT: configService.getOrThrow<string>(
       'EVIDENCE_STORAGE_ROOT',
+    ),
+    SUPABASE_URL: configService.get<string>('SUPABASE_URL'),
+    SUPABASE_SECRET_KEY: configService.get<string>('SUPABASE_SECRET_KEY'),
+    SUPABASE_STORAGE_BUCKET: configService.get<string>(
+      'SUPABASE_STORAGE_BUCKET',
     ),
     UPLOAD_MAX_FILE_SIZE_BYTES: configService.getOrThrow<number>(
       'UPLOAD_MAX_FILE_SIZE_BYTES',
@@ -219,8 +309,12 @@ export function readEnvironment(
       'UPLOAD_MAX_FILES_PER_EXECUTION',
     ),
     EVIDENCE_URL_TTL: configService.getOrThrow<number>('EVIDENCE_URL_TTL'),
-    RATE_LIMIT_STORAGE_DRIVER: configService.getOrThrow<'memory'>(
+    RATE_LIMIT_STORAGE_DRIVER: configService.getOrThrow<'memory' | 'upstash'>(
       'RATE_LIMIT_STORAGE_DRIVER',
+    ),
+    UPSTASH_REDIS_REST_URL: configService.get<string>('UPSTASH_REDIS_REST_URL'),
+    UPSTASH_REDIS_REST_TOKEN: configService.get<string>(
+      'UPSTASH_REDIS_REST_TOKEN',
     ),
   };
 }

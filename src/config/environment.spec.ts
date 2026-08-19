@@ -24,6 +24,7 @@ describe('validateEnvironment', () => {
 
     expect(environment.PORT).toBe(3333);
     expect(environment.HTTP_BODY_LIMIT).toBe('100kb');
+    expect(environment.TRUST_PROXY_HOPS).toBe(0);
     expect(environment.CORS_ORIGINS).toEqual([
       'http://localhost:3000',
       'http://127.0.0.1:3000',
@@ -33,6 +34,7 @@ describe('validateEnvironment', () => {
     expect(environment.PASSWORD_RESET_TOKEN_TTL).toBe(1_800);
     expect(environment.PASSWORD_RESET_DELIVERY_MODE).toBe('local');
     expect(environment.PUBLIC_REGISTRATION_ENABLED).toBe(false);
+    expect(environment.AUTH_COOKIE_SAME_SITE).toBe('strict');
     expect(environment.EVIDENCE_STORAGE_DRIVER).toBe('local');
     expect(environment.RATE_LIMIT_STORAGE_DRIVER).toBe('memory');
   });
@@ -86,6 +88,45 @@ describe('validateEnvironment', () => {
         PASSWORD_RESET_DELIVERY_MODE: 'disabled',
       }),
     ).toThrow(/EVIDENCE_STORAGE_DRIVER.*RATE_LIMIT_STORAGE_DRIVER/);
+  });
+
+  it('accepts the explicit Supabase and Upstash production configuration', () => {
+    const environment = validateEnvironment({
+      ...validEnvironment,
+      NODE_ENV: 'production',
+      WEB_URL: 'https://app.ciclera.example',
+      CORS_ORIGINS: 'https://app.ciclera.example',
+      PASSWORD_RESET_DELIVERY_MODE: 'disabled',
+      AUTH_COOKIE_SAME_SITE: 'none',
+      EVIDENCE_STORAGE_DRIVER: 'supabase',
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_SECRET_KEY: 'test-only-supabase-secret-key',
+      SUPABASE_STORAGE_BUCKET: 'ciclera-evidencias',
+      RATE_LIMIT_STORAGE_DRIVER: 'upstash',
+      UPSTASH_REDIS_REST_URL: 'https://example.upstash.io',
+      UPSTASH_REDIS_REST_TOKEN: 'test-only-upstash-rest-token',
+    });
+
+    expect(environment.TRUST_PROXY_HOPS).toBe(1);
+    expect(environment.EVIDENCE_STORAGE_DRIVER).toBe('supabase');
+    expect(environment.RATE_LIMIT_STORAGE_DRIVER).toBe('upstash');
+    expect(environment.AUTH_COOKIE_SAME_SITE).toBe('none');
+  });
+
+  it('requires every credential selected by a production driver', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        NODE_ENV: 'production',
+        WEB_URL: 'https://app.ciclera.example',
+        CORS_ORIGINS: 'https://app.ciclera.example',
+        PASSWORD_RESET_DELIVERY_MODE: 'disabled',
+        EVIDENCE_STORAGE_DRIVER: 'supabase',
+        RATE_LIMIT_STORAGE_DRIVER: 'upstash',
+      }),
+    ).toThrow(
+      /SUPABASE_URL.*SUPABASE_SECRET_KEY.*SUPABASE_STORAGE_BUCKET.*UPSTASH_REDIS_REST_URL.*UPSTASH_REDIS_REST_TOKEN/,
+    );
   });
 
   it('does not include an invalid secret value in the failure message', () => {

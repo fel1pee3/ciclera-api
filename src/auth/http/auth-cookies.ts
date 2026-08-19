@@ -21,7 +21,7 @@ export class AuthCookieService {
     const sharedOptions: CookieOptions = {
       httpOnly: true,
       secure: environment.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: environment.AUTH_COOKIE_SAME_SITE,
     };
 
     this.accessOptions = {

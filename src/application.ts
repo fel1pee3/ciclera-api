@@ -23,6 +23,10 @@ export function configureApplication(
     environmentOverride ?? readEnvironment(app.get(ConfigService));
   const logger = app.get(StructuredLoggerService);
 
+  if (environment.TRUST_PROXY_HOPS > 0) {
+    app.set('trust proxy', environment.TRUST_PROXY_HOPS);
+  }
+
   logger.setMinimumLevel(environment.LOG_LEVEL);
   app.useLogger(logger);
 
