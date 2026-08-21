@@ -345,6 +345,32 @@ abrupta. Um provedor real e seu tratamento operacional de indisponibilidade são
 obrigatórios antes do deploy. Retry durável ou outbox ficam reservados para a
 evolução de infraestrutura; não existe fila persistente neste checkpoint.
 
+### Assinaturas SaaS e Asaas
+
+| Variável                           | Obrigatória                     | Finalidade                                                                            |
+| ---------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------- |
+| `SUBSCRIPTION_ENFORCEMENT_ENABLED` | Explícita em produção           | Ativa cobrança, limites e restrições de acesso                                        |
+| `ASAAS_API_URL`                    | Quando a cobrança estiver ativa | URL oficial do Sandbox ou da API de produção do Asaas                                 |
+| `ASAAS_API_KEY`                    | Quando a cobrança estiver ativa | Chave server-side; nunca enviada à web ou registrada em logs                          |
+| `ASAAS_WEBHOOK_TOKEN`              | Quando a cobrança estiver ativa | Segredo independente, de 32 a 255 caracteres, usado para autenticar o webhook         |
+
+O desenvolvimento local mantém `SUBSCRIPTION_ENFORCEMENT_ENABLED=false` por
+padrão. Para testar pagamentos, use somente o Sandbox do Asaas e substitua as
+três variáveis acima localmente. Produção exige que o flag seja informado de
+forma explícita e aceita somente `https://api.asaas.com/v3`.
+
+Os planos e preços são definidos exclusivamente no backend: Essencial por
+R$ 199/mês, Profissional por R$ 399/mês e Operação por R$ 699/mês. Não há
+período de teste. Cartão e Pix usam checkout hospedado; boleto usa link de
+pagamento recorrente hospedado. A Ciclera nunca coleta dados de cartão.
+
+Configure no Asaas um webhook para
+`https://api.seu-dominio.com.br/api/v1/webhooks/asaas`, usando exatamente o
+valor de `ASAAS_WEBHOOK_TOKEN`. A volta do navegador não libera acesso: somente
+eventos autenticados do Asaas alteram a assinatura. Cada evento é persistido
+pelo identificador do provedor e processado uma única vez, tornando reentregas
+seguras.
+
 Exemplo seguro implementado até o CP-09:
 
 ```env
@@ -1165,6 +1191,30 @@ paginação no banco. `POST /users` recebe `name`, `email`, `password` e `role`;
 senha é convertida em Argon2id antes da persistência e nunca aparece na resposta.
 `PATCH /users/:userId` altera somente nome e perfil. Desativar revoga todas as
 sessões ainda ativas do usuário. O e-mail normalizado permanece globalmente único.
+
+### Planos e assinatura da organização
+
+```text
+GET  /api/v1/subscriptions/plans
+GET  /api/v1/subscriptions/current
+POST /api/v1/subscriptions/checkout
+POST /api/v1/subscriptions/change-plan
+POST /api/v1/subscriptions/cancel
+POST /api/v1/webhooks/asaas
+```
+
+A assinatura pertence à organização. Somente `OWNER` cria checkout, programa
+troca de plano ou cancela a renovação. `checkout` recebe somente plano e método
+de pagamento: preço, recorrência e URLs de retorno são definidos pela API. O
+webhook não exige sessão, mas exige o header `asaas-access-token` válido e possui
+idempotência pelo ID do evento.
+
+Uma cobrança vencida mantém acesso completo até o sétimo dia. Do oitavo ao
+décimo quinto dia, administradores ficam sem escrita e técnicos podem somente
+concluir atendimentos já iniciados. Depois disso, o tenant fica somente leitura.
+Cancelamento preserva os dados e o acesso até o fim do período pago. Trocas de
+plano entram no ciclo seguinte, sem pró-rata; redução é rejeitada quando usuários
+ativos ou evidências excedem a nova capacidade.
 
 ### Clientes, locais e equipamentos
 

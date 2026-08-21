@@ -29,6 +29,7 @@ import {
   EVIDENCE_STORAGE,
   type EvidenceStorage,
 } from './ports/evidence-storage.port';
+import { SubscriptionEntitlementsService } from '../../subscriptions/application/subscription-entitlements.service';
 
 @Injectable()
 export class EvidenceService {
@@ -41,6 +42,7 @@ export class EvidenceService {
     @Inject(EVIDENCE_STORAGE) private readonly storage: EvidenceStorage,
     private readonly tokens: EvidenceTokenService,
     private readonly workOrders: TechnicianWorkOrdersService,
+    private readonly entitlements: SubscriptionEntitlementsService,
     config: ConfigService,
   ) {
     this.maxSize = config.getOrThrow<number>('UPLOAD_MAX_FILE_SIZE_BYTES');
@@ -71,6 +73,10 @@ export class EvidenceService {
     ) {
       throw new EvidenceTypeInvalidError();
     }
+    await this.entitlements.assertEvidenceStorage(
+      principal.organizationId,
+      input.sizeBytes,
+    );
     const objectKey = `${principal.organizationId}/${workOrderId}/${randomUUID()}`;
     const result = await this.evidence.createIntent({
       organizationId: principal.organizationId,

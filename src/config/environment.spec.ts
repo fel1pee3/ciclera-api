@@ -105,12 +105,34 @@ describe('validateEnvironment', () => {
       RATE_LIMIT_STORAGE_DRIVER: 'upstash',
       UPSTASH_REDIS_REST_URL: 'https://example.upstash.io',
       UPSTASH_REDIS_REST_TOKEN: 'test-only-upstash-rest-token',
+      SUBSCRIPTION_ENFORCEMENT_ENABLED: 'false',
     });
 
     expect(environment.TRUST_PROXY_HOPS).toBe(1);
     expect(environment.EVIDENCE_STORAGE_DRIVER).toBe('supabase');
     expect(environment.RATE_LIMIT_STORAGE_DRIVER).toBe('upstash');
     expect(environment.AUTH_COOKIE_SAME_SITE).toBe('none');
+    expect(environment.SUBSCRIPTION_ENFORCEMENT_ENABLED).toBe(false);
+  });
+
+  it('requires provider secrets when subscription enforcement is enabled', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        SUBSCRIPTION_ENFORCEMENT_ENABLED: 'true',
+      }),
+    ).toThrow(/ASAAS_API_URL.*ASAAS_API_KEY.*ASAAS_WEBHOOK_TOKEN/);
+
+    const environment = validateEnvironment({
+      ...validEnvironment,
+      SUBSCRIPTION_ENFORCEMENT_ENABLED: 'true',
+      ASAAS_API_URL: 'https://api-sandbox.asaas.com/v3',
+      ASAAS_API_KEY: 'test-only-asaas-api-key-with-enough-characters',
+      ASAAS_WEBHOOK_TOKEN:
+        'test-only-independent-webhook-token-with-enough-characters',
+    });
+
+    expect(environment.SUBSCRIPTION_ENFORCEMENT_ENABLED).toBe(true);
   });
 
   it('requires and validates the Resend configuration when selected', () => {

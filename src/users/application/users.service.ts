@@ -17,6 +17,7 @@ import {
   type ListUsersInput,
   type UserRepository,
 } from './ports/user.repository';
+import { SubscriptionEntitlementsService } from '../../subscriptions/application/subscription-entitlements.service';
 
 interface RequestContext {
   principal: AuthenticatedPrincipal;
@@ -28,6 +29,7 @@ export class UsersService {
   constructor(
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
     @Inject(PASSWORD_HASHER) private readonly passwords: PasswordHasher,
+    private readonly entitlements: SubscriptionEntitlementsService,
   ) {}
 
   async list(
@@ -57,6 +59,10 @@ export class UsersService {
     input: { name: string; email: string; password: string; role: UserRole },
   ) {
     this.requireCanManage(context.principal, input.role);
+    await this.entitlements.assertUserSeat(
+      context.principal.organizationId,
+      input.role,
+    );
     const email = normalizeEmail(input.email);
     const result = await this.users.create({
       organizationId: context.principal.organizationId,
@@ -94,6 +100,16 @@ export class UsersService {
     }
     const target = await this.find(context, userId);
     if (input.role) this.requireCanManage(context.principal, input.role);
+    if (
+      input.role &&
+      target.status === 'ACTIVE' &&
+      seatCategory(input.role) !== seatCategory(target.role)
+    ) {
+      await this.entitlements.assertUserSeat(
+        context.principal.organizationId,
+        input.role,
+      );
+    }
     const email =
       input.email === undefined ? undefined : normalizeEmail(input.email);
     const result = await this.users.update({
@@ -113,6 +129,12 @@ export class UsersService {
 
   async setStatus(context: RequestContext, userId: string, status: UserStatus) {
     const target = await this.find(context, userId);
+    if (target.status === 'INACTIVE' && status === 'ACTIVE') {
+      await this.entitlements.assertUserSeat(
+        context.principal.organizationId,
+        target.role,
+      );
+    }
     const result = await this.users.setStatus({
       organizationId: context.principal.organizationId,
       actorUserId: context.principal.userId,
@@ -138,6 +160,10 @@ export class UsersService {
       throw new UserManagementForbiddenError();
     }
   }
+}
+
+function seatCategory(role: UserRole): 'TECHNICIAN' | 'ADMINISTRATIVE' {
+  return role === 'TECHNICIAN' ? 'TECHNICIAN' : 'ADMINISTRATIVE';
 }
 
 function resolveUpdateResult<T>(

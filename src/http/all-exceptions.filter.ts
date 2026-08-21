@@ -60,6 +60,16 @@ import {
   AdditionalItemInvalidError,
   AdditionalItemNotFoundError,
 } from '../additional-items/domain/additional-item.errors';
+import {
+  SubscriptionChangeInvalidError,
+  SubscriptionCheckoutUnavailableError,
+  SubscriptionLimitExceededError,
+  SubscriptionOwnerRequiredError,
+  SubscriptionRequiredError,
+  SubscriptionWebhookUnauthorizedError,
+  SubscriptionWebhookInvalidError,
+  SubscriptionWriteRestrictedError,
+} from '../subscriptions/domain/subscription.errors';
 
 export interface ProblemDetails {
   type: string;
@@ -124,6 +134,74 @@ export class AllExceptionsFilter implements ExceptionFilter {
 }
 
 function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
+  if (exception instanceof SubscriptionRequiredError) {
+    return {
+      type: 'https://ciclera.com.br/problems/subscription-required',
+      title: 'Assinatura necessária',
+      detail:
+        'Escolha um plano e confirme o pagamento para liberar alterações.',
+      code: 'SUBSCRIPTION_REQUIRED',
+    };
+  }
+  if (exception instanceof SubscriptionWriteRestrictedError) {
+    return {
+      type: 'https://ciclera.com.br/problems/subscription-restricted',
+      title: 'Conta com alterações restritas',
+      detail: 'Regularize a assinatura para voltar a criar ou alterar dados.',
+      code: 'SUBSCRIPTION_WRITE_RESTRICTED',
+    };
+  }
+  if (exception instanceof SubscriptionLimitExceededError) {
+    return {
+      type: 'https://ciclera.com.br/problems/subscription-limit',
+      title: 'Limite do plano atingido',
+      detail:
+        'O plano atual não possui capacidade disponível para esta operação.',
+      code: `SUBSCRIPTION_${exception.limit}_LIMIT`,
+    };
+  }
+  if (exception instanceof SubscriptionOwnerRequiredError) {
+    return {
+      type: 'https://ciclera.com.br/problems/subscription-owner-required',
+      title: 'Acesso do proprietário necessário',
+      detail: 'Somente o proprietário pode administrar a assinatura.',
+      code: 'SUBSCRIPTION_OWNER_REQUIRED',
+    };
+  }
+  if (exception instanceof SubscriptionChangeInvalidError) {
+    return {
+      type: 'https://ciclera.com.br/problems/subscription-change-invalid',
+      title: 'Alteração de plano indisponível',
+      detail:
+        'Revise o plano atual, os limites utilizados e a situação da assinatura.',
+      code: 'SUBSCRIPTION_CHANGE_INVALID',
+    };
+  }
+  if (exception instanceof SubscriptionCheckoutUnavailableError) {
+    return {
+      type: 'https://ciclera.com.br/problems/subscription-checkout-unavailable',
+      title: 'Pagamento temporariamente indisponível',
+      detail:
+        'Não foi possível abrir o ambiente de pagamento. Tente novamente em instantes.',
+      code: 'SUBSCRIPTION_CHECKOUT_UNAVAILABLE',
+    };
+  }
+  if (exception instanceof SubscriptionWebhookUnauthorizedError) {
+    return {
+      type: 'https://ciclera.com.br/problems/webhook-unauthorized',
+      title: 'Webhook não autorizado',
+      detail: 'A autenticação do evento não foi aceita.',
+      code: 'WEBHOOK_UNAUTHORIZED',
+    };
+  }
+  if (exception instanceof SubscriptionWebhookInvalidError) {
+    return {
+      type: 'https://ciclera.com.br/problems/webhook-invalid',
+      title: 'Evento inv\u00e1lido',
+      detail: 'O evento recebido n\u00e3o possui o formato esperado.',
+      code: 'WEBHOOK_INVALID',
+    };
+  }
   if (exception instanceof AuthenticationRejectedError) {
     return {
       type: 'https://ciclera.com.br/problems/invalid-credentials',
@@ -500,6 +578,12 @@ function getProblemDefaults(status: number): ProblemDefaults {
       detail: 'A autenticação é necessária para acessar este recurso.',
       code: 'UNAUTHORIZED',
     },
+    [HttpStatus.PAYMENT_REQUIRED]: {
+      slug: 'payment-required',
+      title: 'Pagamento necessário',
+      detail: 'Regularize a assinatura para continuar.',
+      code: 'PAYMENT_REQUIRED',
+    },
     [HttpStatus.FORBIDDEN]: {
       slug: 'forbidden',
       title: 'Acesso negado',
@@ -556,6 +640,30 @@ function getProblemDefaults(status: number): ProblemDefaults {
 }
 
 function getHttpStatus(exception: unknown): number {
+  if (
+    exception instanceof SubscriptionRequiredError ||
+    exception instanceof SubscriptionWriteRestrictedError
+  ) {
+    return HttpStatus.PAYMENT_REQUIRED;
+  }
+  if (exception instanceof SubscriptionOwnerRequiredError) {
+    return HttpStatus.FORBIDDEN;
+  }
+  if (
+    exception instanceof SubscriptionLimitExceededError ||
+    exception instanceof SubscriptionChangeInvalidError
+  ) {
+    return HttpStatus.CONFLICT;
+  }
+  if (exception instanceof SubscriptionCheckoutUnavailableError) {
+    return HttpStatus.SERVICE_UNAVAILABLE;
+  }
+  if (exception instanceof SubscriptionWebhookUnauthorizedError) {
+    return HttpStatus.UNAUTHORIZED;
+  }
+  if (exception instanceof SubscriptionWebhookInvalidError) {
+    return HttpStatus.BAD_REQUEST;
+  }
   if (exception instanceof AuthenticationRejectedError) {
     return HttpStatus.UNAUTHORIZED;
   }

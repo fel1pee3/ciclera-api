@@ -29,6 +29,7 @@ const environment = {
   UPLOAD_MAX_FILES_PER_EXECUTION: 20,
   EVIDENCE_URL_TTL: 300,
   RATE_LIMIT_STORAGE_DRIVER: 'memory',
+  SUBSCRIPTION_ENFORCEMENT_ENABLED: false,
 } as const;
 
 describe('CookieCsrfGuard', () => {

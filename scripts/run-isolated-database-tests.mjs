@@ -59,6 +59,13 @@ const migrationEnvironment = {
   DATABASE_URL: testDatabaseUrl.toString(),
 };
 
+class CommandFailedError extends Error {
+  constructor(exitCode) {
+    super(`Database test command failed with exit code ${exitCode}.`);
+    this.exitCode = exitCode;
+  }
+}
+
 let exitCode = 0;
 
 try {
@@ -156,12 +163,5 @@ function run(executable, args, environment) {
 
   if (result.status !== 0) {
     throw new CommandFailedError(result.status ?? 1);
-  }
-}
-
-class CommandFailedError extends Error {
-  constructor(exitCode) {
-    super(`Database test command failed with exit code ${exitCode}.`);
-    this.exitCode = exitCode;
   }
 }

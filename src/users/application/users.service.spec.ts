@@ -7,11 +7,13 @@ import {
   UserEmailAlreadyInUseError,
   UserManagementForbiddenError,
 } from '../domain/user-management.errors';
+import type { SubscriptionEntitlementsService } from '../../subscriptions/application/subscription-entitlements.service';
 
 describe('UsersService', () => {
   let repository: jest.Mocked<UserRepository>;
   let passwords: jest.Mocked<PasswordHasher>;
   let service: UsersService;
+  let entitlements: jest.Mocked<SubscriptionEntitlementsService>;
 
   beforeEach(() => {
     repository = {
@@ -26,7 +28,12 @@ describe('UsersService', () => {
       verify: jest.fn(),
       performDummyVerification: jest.fn(),
     };
-    service = new UsersService(repository, passwords);
+    entitlements = {
+      enforcementEnabled: false,
+      assertUserSeat: jest.fn(),
+      assertEvidenceStorage: jest.fn(),
+    } as unknown as jest.Mocked<SubscriptionEntitlementsService>;
+    service = new UsersService(repository, passwords, entitlements);
   });
 
   it('always scopes listings to the authenticated organization', async () => {

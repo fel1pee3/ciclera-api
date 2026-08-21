@@ -45,6 +45,9 @@ export class PrismaPublicRegistrationRepository implements PublicRegistrationRep
             await transaction.workOrderCounter.create({
               data: { organizationId: organization.id, lastNumber: 0 },
             });
+            await transaction.organizationSubscription.create({
+              data: { organizationId: organization.id, status: 'PENDING' },
+            });
             await transaction.legalAcceptance.create({
               data: {
                 organizationId: organization.id,

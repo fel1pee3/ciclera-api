@@ -67,6 +67,10 @@ const rawEnvironmentSchema = z.object({
   RATE_LIMIT_STORAGE_DRIVER: z.enum(['memory', 'upstash']).default('memory'),
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(20).max(4_096).optional(),
+  SUBSCRIPTION_ENFORCEMENT_ENABLED: z.enum(['true', 'false']).optional(),
+  ASAAS_API_URL: z.string().url().optional(),
+  ASAAS_API_KEY: z.string().min(20).max(4_096).optional(),
+  ASAAS_WEBHOOK_TOKEN: z.string().min(32).max(255).optional(),
 });
 
 export type NodeEnvironment = 'development' | 'test' | 'production';
@@ -105,6 +109,10 @@ export interface EnvironmentVariables {
   RATE_LIMIT_STORAGE_DRIVER: 'memory' | 'upstash';
   UPSTASH_REDIS_REST_URL?: string;
   UPSTASH_REDIS_REST_TOKEN?: string;
+  SUBSCRIPTION_ENFORCEMENT_ENABLED: boolean;
+  ASAAS_API_URL?: string;
+  ASAAS_API_KEY?: string;
+  ASAAS_WEBHOOK_TOKEN?: string;
 }
 
 export function validateEnvironment(
@@ -225,6 +233,31 @@ export function validateEnvironment(
     );
   }
 
+  const subscriptionEnforcementEnabled =
+    data.SUBSCRIPTION_ENFORCEMENT_ENABLED === 'true';
+  if (
+    data.NODE_ENV === 'production' &&
+    data.SUBSCRIPTION_ENFORCEMENT_ENABLED === undefined
+  ) {
+    issues.push(
+      'SUBSCRIPTION_ENFORCEMENT_ENABLED: must be explicitly configured in production',
+    );
+  }
+  if (subscriptionEnforcementEnabled) {
+    if (!data.ASAAS_API_URL) issues.push('ASAAS_API_URL: is required');
+    if (!data.ASAAS_API_KEY) issues.push('ASAAS_API_KEY: is required');
+    if (!data.ASAAS_WEBHOOK_TOKEN)
+      issues.push('ASAAS_WEBHOOK_TOKEN: is required');
+    if (
+      data.NODE_ENV === 'production' &&
+      data.ASAAS_API_URL !== 'https://api.asaas.com/v3'
+    ) {
+      issues.push(
+        'ASAAS_API_URL: production requires https://api.asaas.com/v3',
+      );
+    }
+  }
+
   if (
     data.NODE_ENV === 'production' &&
     data.RATE_LIMIT_STORAGE_DRIVER !== 'upstash'
@@ -274,6 +307,10 @@ export function validateEnvironment(
     RATE_LIMIT_STORAGE_DRIVER: data.RATE_LIMIT_STORAGE_DRIVER,
     UPSTASH_REDIS_REST_URL: data.UPSTASH_REDIS_REST_URL,
     UPSTASH_REDIS_REST_TOKEN: data.UPSTASH_REDIS_REST_TOKEN,
+    SUBSCRIPTION_ENFORCEMENT_ENABLED: subscriptionEnforcementEnabled,
+    ASAAS_API_URL: data.ASAAS_API_URL,
+    ASAAS_API_KEY: data.ASAAS_API_KEY,
+    ASAAS_WEBHOOK_TOKEN: data.ASAAS_WEBHOOK_TOKEN,
   };
 }
 
@@ -339,6 +376,12 @@ export function readEnvironment(
     UPSTASH_REDIS_REST_TOKEN: configService.get<string>(
       'UPSTASH_REDIS_REST_TOKEN',
     ),
+    SUBSCRIPTION_ENFORCEMENT_ENABLED: configService.getOrThrow<boolean>(
+      'SUBSCRIPTION_ENFORCEMENT_ENABLED',
+    ),
+    ASAAS_API_URL: configService.get<string>('ASAAS_API_URL'),
+    ASAAS_API_KEY: configService.get<string>('ASAAS_API_KEY'),
+    ASAAS_WEBHOOK_TOKEN: configService.get<string>('ASAAS_WEBHOOK_TOKEN'),
   };
 }
 

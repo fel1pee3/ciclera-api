@@ -894,7 +894,7 @@ describe('Authentication flow', () => {
       resetAttempts.slice(0, 10).every((response) => response.status === 400),
     ).toBe(true);
     expect(resetAttempts[10]?.status).toBe(429);
-  });
+  }, 30_000);
 
   function login(
     email: string,

@@ -219,6 +219,9 @@ describe('Public registration persistence', () => {
     await prisma.workOrderCounter.deleteMany({
       where: { organizationId: { in: ids } },
     });
+    await prisma.organizationSubscription.deleteMany({
+      where: { organizationId: { in: ids } },
+    });
     await prisma.user.deleteMany({ where: { organizationId: { in: ids } } });
     await prisma.organization.deleteMany({ where: { id: { in: ids } } });
   }

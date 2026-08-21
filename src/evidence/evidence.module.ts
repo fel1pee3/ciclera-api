@@ -12,9 +12,10 @@ import { EvidenceTokenService } from './infrastructure/evidence-token.service';
 import { LocalEvidenceStorage } from './infrastructure/local-evidence-storage';
 import { PrismaEvidenceRepository } from './infrastructure/prisma-evidence.repository';
 import { SupabaseEvidenceStorage } from './infrastructure/supabase-evidence-storage';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 @Module({
-  imports: [AuthModule, PrismaModule, WorkOrdersModule],
+  imports: [AuthModule, PrismaModule, WorkOrdersModule, SubscriptionsModule],
   controllers: [EvidenceController, ReviewEvidenceController],
   providers: [
     EvidenceService,

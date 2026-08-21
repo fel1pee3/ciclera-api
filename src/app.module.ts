@@ -20,6 +20,7 @@ import { HistoryModule } from './history/history.module';
 import { ReportsModule } from './reports/reports.module';
 import { ImportsModule } from './imports/imports.module';
 import { UpstashThrottlerStorage } from './infrastructure/rate-limit/upstash-throttler-storage';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { UpstashThrottlerStorage } from './infrastructure/rate-limit/upstash-thr
     PrismaModule,
     AdditionalItemsModule,
     AuthModule,
+    SubscriptionsModule,
     UsersModule,
     CustomersModule,
     EquipmentModule,

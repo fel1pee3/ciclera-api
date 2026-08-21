@@ -47,6 +47,7 @@ import {
 } from './password-reset.dto';
 import { Public } from './public.decorator';
 import { PublicRegistrationRequestDto } from './public-registration.dto';
+import { SubscriptionExempt } from '../../subscriptions/http/subscription-exempt.decorator';
 import {
   PublicRegistrationEnabledGuard,
   PublicRegistrationRequestGuard,
@@ -55,6 +56,7 @@ import type { RequestWithId } from '../../http/request-id';
 import { getRequestId } from '../../http/request-id';
 
 @ApiTags('auth')
+@SubscriptionExempt()
 @Controller('auth')
 export class AuthController {
   constructor(
