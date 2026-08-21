@@ -149,17 +149,16 @@ describe('subscriptionAccess', () => {
   });
 
   it.each([
-    [7, 'FULL'],
-    [8, 'LIMITED'],
-    [15, 'LIMITED'],
-    [16, 'READ_ONLY'],
-  ] as const)('maps day %s overdue to %s access', (days, expected) => {
+    [3 * 86_400_000 - 1, 'FULL'],
+    [3 * 86_400_000, 'READ_ONLY'],
+    [4 * 86_400_000, 'READ_ONLY'],
+  ] as const)('maps %s ms overdue to %s access', (elapsed, expected) => {
     expect(
       subscriptionAccess(
         subscription({
           status: 'PAST_DUE',
           planCode: 'ESSENTIAL',
-          overdueSince: new Date(now.getTime() - days * 86_400_000),
+          overdueSince: new Date(now.getTime() - elapsed),
         }),
         now,
       ),

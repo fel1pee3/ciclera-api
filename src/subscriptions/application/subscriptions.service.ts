@@ -204,7 +204,7 @@ function presentSubscription(
 export function subscriptionAccess(
   subscription: SubscriptionRecord,
   now = new Date(),
-): 'FULL' | 'LIMITED' | 'READ_ONLY' {
+): 'FULL' | 'READ_ONLY' {
   if (subscription.status === 'ACTIVE') return 'FULL';
   if (
     subscription.status === 'CANCELED' &&
@@ -214,11 +214,12 @@ export function subscriptionAccess(
     return 'FULL';
   if (subscription.status !== 'PAST_DUE' || !subscription.overdueSince)
     return 'READ_ONLY';
-  const days = Math.floor(
-    (now.getTime() - subscription.overdueSince.getTime()) / 86_400_000,
-  );
-  return days <= 7 ? 'FULL' : days <= 15 ? 'LIMITED' : 'READ_ONLY';
+  const gracePeriodEndsAt =
+    subscription.overdueSince.getTime() + subscriptionGracePeriodMs;
+  return now.getTime() < gracePeriodEndsAt ? 'FULL' : 'READ_ONLY';
 }
+
+const subscriptionGracePeriodMs = 3 * 86_400_000;
 
 function safeEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);

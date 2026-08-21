@@ -1,6 +1,6 @@
 export class SubscriptionOwnerRequiredError extends Error {}
 export class SubscriptionRequiredError extends Error {}
-export class SubscriptionWriteRestrictedError extends Error {}
+export class SubscriptionAccessRestrictedError extends Error {}
 export class SubscriptionLimitExceededError extends Error {
   constructor(
     public readonly limit:

@@ -373,10 +373,12 @@ seguras.
 
 Com a cobrança ativa, organizações que nunca confirmaram um plano acessam apenas
 autenticação e as rotas de assinatura; leituras e escritas operacionais retornam
-`402 SUBSCRIPTION_REQUIRED`. Depois de uma assinatura válida, a tolerância de
-inadimplência preserva os níveis `FULL`, `LIMITED` e `READ_ONLY` definidos pelo
-ciclo de cobrança. Requisições `OPTIONS` continuam livres para o preflight de
-CORS.
+`402 SUBSCRIPTION_REQUIRED`. Depois de uma assinatura válida, a organização
+mantém acesso completo por exatamente 72 horas após o vencimento, com aviso para
+regularização. Encerrada essa carência de 3 dias, leituras e escritas operacionais
+retornam `402 SUBSCRIPTION_ACCESS_RESTRICTED` até a confirmação do pagamento.
+Autenticação e rotas de assinatura permanecem disponíveis, e requisições
+`OPTIONS` continuam livres para o preflight de CORS.
 
 Exemplo seguro implementado até o CP-09:
 

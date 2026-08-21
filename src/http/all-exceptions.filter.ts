@@ -68,7 +68,7 @@ import {
   SubscriptionRequiredError,
   SubscriptionWebhookUnauthorizedError,
   SubscriptionWebhookInvalidError,
-  SubscriptionWriteRestrictedError,
+  SubscriptionAccessRestrictedError,
 } from '../subscriptions/domain/subscription.errors';
 
 export interface ProblemDetails {
@@ -143,12 +143,12 @@ function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
       code: 'SUBSCRIPTION_REQUIRED',
     };
   }
-  if (exception instanceof SubscriptionWriteRestrictedError) {
+  if (exception instanceof SubscriptionAccessRestrictedError) {
     return {
       type: 'https://ciclera.com.br/problems/subscription-restricted',
-      title: 'Conta com alterações restritas',
-      detail: 'Regularize a assinatura para voltar a criar ou alterar dados.',
-      code: 'SUBSCRIPTION_WRITE_RESTRICTED',
+      title: 'Acesso suspenso por pagamento',
+      detail: 'Regularize a assinatura para voltar a acessar a operação.',
+      code: 'SUBSCRIPTION_ACCESS_RESTRICTED',
     };
   }
   if (exception instanceof SubscriptionLimitExceededError) {
@@ -642,7 +642,7 @@ function getProblemDefaults(status: number): ProblemDefaults {
 function getHttpStatus(exception: unknown): number {
   if (
     exception instanceof SubscriptionRequiredError ||
-    exception instanceof SubscriptionWriteRestrictedError
+    exception instanceof SubscriptionAccessRestrictedError
   ) {
     return HttpStatus.PAYMENT_REQUIRED;
   }

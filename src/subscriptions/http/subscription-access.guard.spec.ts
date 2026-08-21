@@ -6,11 +6,11 @@ import type {
   SubscriptionRecord,
   SubscriptionRepository,
 } from '../application/ports/subscription.repository';
-import { SubscriptionRequiredError } from '../domain/subscription.errors';
 import {
-  isAllowedFieldCompletionWrite,
-  SubscriptionAccessGuard,
-} from './subscription-access.guard';
+  SubscriptionAccessRestrictedError,
+  SubscriptionRequiredError,
+} from '../domain/subscription.errors';
+import { SubscriptionAccessGuard } from './subscription-access.guard';
 
 describe('SubscriptionAccessGuard', () => {
   const organizationId = '11111111-1111-4111-8111-111111111111';
@@ -30,16 +30,36 @@ describe('SubscriptionAccessGuard', () => {
     ).rejects.toBeInstanceOf(SubscriptionRequiredError);
   });
 
-  it('preserves operational reads for a previously subscribed read-only organization', async () => {
-    repository.current = jest
-      .fn()
-      .mockResolvedValue(
-        subscription({ planCode: 'ESSENTIAL', status: 'ENDED' }),
+  it.each(['GET', 'POST'])(
+    'blocks %s access after the three-day grace period',
+    async (method) => {
+      repository.current = jest.fn().mockResolvedValue(
+        subscription({
+          planCode: 'ESSENTIAL',
+          status: 'PAST_DUE',
+          overdueSince: new Date(Date.now() - 3 * 86_400_000),
+        }),
       );
+      const guard = createGuard(reflector, repository, true);
+
+      await expect(
+        guard.canActivate(contextFor(method, '/api/v1/customers')),
+      ).rejects.toBeInstanceOf(SubscriptionAccessRestrictedError);
+    },
+  );
+
+  it('keeps operational access during the three-day grace period', async () => {
+    repository.current = jest.fn().mockResolvedValue(
+      subscription({
+        planCode: 'ESSENTIAL',
+        status: 'PAST_DUE',
+        overdueSince: new Date(Date.now() - 2 * 86_400_000),
+      }),
+    );
     const guard = createGuard(reflector, repository, true);
 
     await expect(
-      guard.canActivate(contextFor('GET', '/api/v1/customers')),
+      guard.canActivate(contextFor('POST', '/api/v1/customers')),
     ).resolves.toBe(true);
   });
 
@@ -111,36 +131,4 @@ describe('SubscriptionAccessGuard', () => {
       ...overrides,
     };
   }
-});
-
-describe('limited subscription field writes', () => {
-  const order = '11111111-1111-4111-8111-111111111111';
-  const evidence = '22222222-2222-4222-8222-222222222222';
-
-  it.each([
-    ['PATCH', `/api/v1/field/work-orders/${order}/execution`],
-    ['POST', `/api/v1/field/work-orders/${order}/submit-for-review`],
-    ['POST', `/api/v1/field/work-orders/${order}/resume-correction`],
-    ['POST', `/api/v1/field/work-orders/${order}/execution/additional-items`],
-    [
-      'DELETE',
-      `/api/v1/field/work-orders/${order}/execution/additional-items/${evidence}`,
-    ],
-    ['POST', `/api/v1/field/work-orders/${order}/execution/evidence/intents`],
-    ['PUT', `/api/v1/field/evidence/${evidence}/upload`],
-    [
-      'POST',
-      `/api/v1/field/work-orders/${order}/execution/evidence/${evidence}/confirm`,
-    ],
-  ])('allows %s %s to finish ongoing field work', (method, path) => {
-    expect(isAllowedFieldCompletionWrite(method, path)).toBe(true);
-  });
-
-  it.each([
-    ['POST', `/api/v1/field/work-orders/${order}/start`],
-    ['POST', '/api/v1/work-orders'],
-    ['PATCH', '/api/v1/customers/11111111-1111-4111-8111-111111111111'],
-  ])('blocks %s %s from starting or changing other work', (method, path) => {
-    expect(isAllowedFieldCompletionWrite(method, path)).toBe(false);
-  });
 });
