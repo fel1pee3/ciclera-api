@@ -73,6 +73,7 @@ describe('AsaasSubscriptionPaymentGateway', () => {
       },
       items: [expect.objectContaining({ value: 199 })],
     });
+    expect(body).not.toHaveProperty('customerData');
     expect(JSON.stringify(body)).not.toContain('$aact_local_secret');
     expect(request.headers).toMatchObject({
       access_token: '$aact_local_secret_never_exposed',

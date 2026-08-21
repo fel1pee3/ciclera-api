@@ -84,10 +84,6 @@ export class AsaasSubscriptionPaymentGateway implements SubscriptionPaymentGatew
               value: amount,
             },
           ],
-          customerData: {
-            name: input.ownerName,
-            email: input.ownerEmail,
-          },
           subscription: {
             cycle: 'MONTHLY',
             nextDueDate: formatAsaasDateTime(new Date()),
