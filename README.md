@@ -371,6 +371,13 @@ eventos autenticados do Asaas alteram a assinatura. Cada evento é persistido
 pelo identificador do provedor e processado uma única vez, tornando reentregas
 seguras.
 
+Com a cobrança ativa, organizações que nunca confirmaram um plano acessam apenas
+autenticação e as rotas de assinatura; leituras e escritas operacionais retornam
+`402 SUBSCRIPTION_REQUIRED`. Depois de uma assinatura válida, a tolerância de
+inadimplência preserva os níveis `FULL`, `LIMITED` e `READ_ONLY` definidos pelo
+ciclo de cobrança. Requisições `OPTIONS` continuam livres para o preflight de
+CORS.
+
 Exemplo seguro implementado até o CP-09:
 
 ```env

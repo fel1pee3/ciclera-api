@@ -139,7 +139,7 @@ function getSafeOverrides(exception: unknown): Partial<ProblemDetails> {
       type: 'https://ciclera.com.br/problems/subscription-required',
       title: 'Assinatura necessária',
       detail:
-        'Escolha um plano e confirme o pagamento para liberar alterações.',
+        'Escolha um plano e confirme o pagamento para liberar a operação.',
       code: 'SUBSCRIPTION_REQUIRED',
     };
   }

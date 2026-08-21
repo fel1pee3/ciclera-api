@@ -50,17 +50,15 @@ export class SubscriptionAccessGuard implements CanActivate {
     const request = context
       .switchToHttp()
       .getRequest<AuthenticatedRequest & Request>();
-    if (
-      request.method === 'GET' ||
-      request.method === 'HEAD' ||
-      request.method === 'OPTIONS'
-    )
-      return true;
+    if (request.method === 'OPTIONS') return true;
+
     const principal = getAuthenticatedPrincipal(request);
     const subscription = await this.subscriptions.current(
       principal.organizationId,
     );
     if (!subscription.planCode) throw new SubscriptionRequiredError();
+    if (request.method === 'GET' || request.method === 'HEAD') return true;
+
     const access = subscriptionAccess(subscription);
     if (access === 'FULL') return true;
     if (
