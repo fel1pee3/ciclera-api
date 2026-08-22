@@ -14,7 +14,7 @@ CP-44 estiverem aprovadas.
 - Cinco clientes fictícios, com pelo menos dois locais por cliente e dez
   equipamentos distribuídos entre os locais.
 - Arquivos JPEG, PNG e WebP fictícios dentro e fora dos limites permitidos; nunca
-  usar fotos, assinaturas, documentos ou contatos reais.
+  usar fotos, documentos ou contatos reais.
 - Uma planilha CSV válida e cópias com cabeçalho inválido, duplicidade e fórmulas
   iniciadas por `=`, `+`, `-` e `@`.
 
@@ -25,10 +25,10 @@ seguro. Elas não entram neste documento, tickets, screenshots ou logs.
 
 | OS | Variação obrigatória | Resultado esperado |
 | --- | --- | --- |
-| 1 | Fluxo simples com foto e assinatura | Aprovada, pronta e faturada |
+| 1 | Fluxo simples com fotos do atendimento | Aprovada, pronta e faturada |
 | 2 | Checklist parcialmente salvo e reload | Dados confirmados persistem |
 | 3 | Foto obrigatória ausente | Submissão bloqueada com mensagem útil |
-| 4 | Assinatura obrigatória ausente | Submissão bloqueada com mensagem útil |
+| 4 | Upload interrompido e retomado | Retry seguro sem evidência duplicada |
 | 5 | Material e serviço adicional | Total exato em centavos no detalhe, PDF e CSV |
 | 6 | Correção solicitada pelo admin | Técnico corrige, reenvia e histórico permanece |
 | 7 | Reatribuição e reagendamento | Timeline preserva atribuições e horários |
@@ -91,7 +91,7 @@ Classificação de defeitos:
 
 - Organização, timezone e responsáveis confirmados.
 - Dono da conta e canal seguro de credenciais definidos.
-- Técnicos treinados em checklist, evidências, assinatura, retry e conflitos.
+- Técnicos treinados em evidências, retry e conflitos.
 - Modelo de importação validado com dados fictícios antes dos dados autorizados.
 - Política de retenção, privacidade e responsáveis por evidências acordados.
 - Canal e horário de suporte, severidades e SLA inicial informados.

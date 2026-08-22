@@ -135,17 +135,14 @@ export class ServiceReportService {
     });
     layout.section(
       'Evidências do atendimento',
-      'Fotos e assinatura selecionadas para compor este relatório.',
+      'Fotos selecionadas para compor este relatório.',
     );
     let photoNumber = 0;
     for (const evidence of data.evidence) {
-      const label =
-        evidence.kind === 'SIGNATURE'
-          ? 'Assinatura do responsável'
-          : `Foto ${++photoNumber}`;
+      const label = `Foto ${++photoNumber}`;
       try {
         const bytes = await this.storage.readObject(evidence.objectKey);
-        await layout.image(bytes, evidence.contentType, label, evidence.kind);
+        await layout.image(bytes, evidence.contentType, label);
       } catch {
         layout.notice(
           `${label} indisponível no armazenamento no momento da emissão.`,
@@ -446,12 +443,7 @@ class PdfLayout {
     this.y = top - height - 10;
   }
 
-  async image(
-    bytes: Buffer,
-    contentType: string,
-    label: string,
-    kind: 'PHOTO' | 'SIGNATURE',
-  ) {
+  async image(bytes: Buffer, contentType: string, label: string) {
     const image =
       contentType === 'image/png'
         ? await this.document.embedPng(bytes)
@@ -462,10 +454,7 @@ class PdfLayout {
       this.notice(`${label}: formato não suportado neste relatório.`);
       return;
     }
-    const scaled = image.scaleToFit(
-      this.contentWidth - 28,
-      kind === 'SIGNATURE' ? 135 : 265,
-    );
+    const scaled = image.scaleToFit(this.contentWidth - 28, 265);
     const height = scaled.height + 48;
     this.ensure(height + 10);
     const top = this.y;

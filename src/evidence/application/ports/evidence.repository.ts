@@ -1,13 +1,11 @@
 export const EVIDENCE_REPOSITORY = Symbol('EVIDENCE_REPOSITORY');
 
-export type EvidenceKind = 'PHOTO' | 'SIGNATURE';
 export type EvidenceStatus = 'PENDING' | 'AVAILABLE';
 
 export interface EvidenceRecord {
   id: string;
   workOrderId: string;
   executionId: string;
-  kind: EvidenceKind;
   status: EvidenceStatus;
   objectKey: string;
   fileName: string;
@@ -32,7 +30,6 @@ export interface EvidenceRepository {
     workOrderId: string;
     expectedVersion: number;
     requestId: string;
-    kind: EvidenceKind;
     objectKey: string;
     fileName: string;
     contentType: string;

@@ -47,7 +47,6 @@ const technicianWorkOrderSelect = {
         where: { status: 'AVAILABLE' },
         select: {
           id: true,
-          kind: true,
           fileName: true,
           contentType: true,
           sizeBytes: true,

@@ -120,7 +120,6 @@ function fixture(): ServiceReportData {
     evidence: [
       {
         id: 'evidence-id',
-        kind: 'PHOTO',
         objectKey: 'tenant/report/photo',
         contentType: 'image/png',
       },

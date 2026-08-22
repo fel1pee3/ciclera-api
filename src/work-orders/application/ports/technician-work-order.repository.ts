@@ -58,7 +58,6 @@ export interface WorkOrderExecution {
   updatedAt: Date;
   evidence: Array<{
     id: string;
-    kind: 'PHOTO' | 'SIGNATURE';
     fileName: string;
     contentType: string;
     sizeBytes: bigint;

@@ -46,7 +46,6 @@ export interface ServiceReportData {
   }>;
   evidence: Array<{
     id: string;
-    kind: 'PHOTO' | 'SIGNATURE';
     objectKey: string;
     contentType: string;
   }>;

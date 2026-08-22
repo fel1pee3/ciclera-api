@@ -72,8 +72,8 @@ export class PrismaReportRepository implements ReportRepository {
         },
         evidence: {
           where: { status: 'AVAILABLE' },
-          select: { id: true, kind: true, objectKey: true, contentType: true },
-          orderBy: [{ kind: 'asc' }, { createdAt: 'asc' }],
+          select: { id: true, objectKey: true, contentType: true },
+          orderBy: { createdAt: 'asc' },
           take: 10,
         },
       },

@@ -46,11 +46,6 @@ enum WorkOrderPriority {
   URGENT
 }
 
-enum EvidenceKind {
-  PHOTO
-  SIGNATURE
-}
-
 enum EvidenceStatus {
   PENDING
   AVAILABLE
@@ -69,7 +64,6 @@ enum ReviewDecision {
 
 enum ReviewReason {
   REQUIRED_PHOTO_MISSING
-  SIGNATURE_MISSING
   MATERIAL_WITHOUT_VALUE
   ADDITIONAL_SERVICE_UNAPPROVED
   EQUIPMENT_DATA_INCORRECT
@@ -487,7 +481,6 @@ model Evidence {
   execution       WorkOrderExecution @relation(fields: [organizationId, executionId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
   createdByUserId String             @map("created_by_user_id") @db.Uuid
   createdBy       User               @relation("EvidenceCreator", fields: [organizationId, createdByUserId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade)
-  kind            EvidenceKind
   status          EvidenceStatus     @default(PENDING)
   objectKey       String             @unique @map("object_key") @db.VarChar(500)
   fileName        String             @map("file_name") @db.VarChar(255)

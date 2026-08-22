@@ -188,18 +188,7 @@ describe('MVP commercial journey', () => {
       technicianA,
       draft.id,
       current,
-      'PHOTO',
       'foto.png',
-      objectKeys,
-    );
-    current = await addEvidence(
-      evidence,
-      prisma,
-      technicianA,
-      draft.id,
-      current,
-      'SIGNATURE',
-      'assinatura.png',
       objectKeys,
     );
     current = await additionalItems.create(
@@ -306,7 +295,6 @@ async function addEvidence(
   principal: AuthenticatedPrincipal,
   workOrderId: string,
   current: Awaited<ReturnType<TechnicianWorkOrdersService['find']>>,
-  kind: 'PHOTO' | 'SIGNATURE',
   fileName: string,
   objectKeys: string[],
 ) {
@@ -316,11 +304,10 @@ async function addEvidence(
   );
   const created = await evidence.createIntent(
     principal,
-    `intent-${kind}`,
+    `intent-${randomUUID()}`,
     workOrderId,
     {
       version: requiredExecutionVersion(current),
-      kind,
       fileName,
       contentType: 'image/png',
       sizeBytes: content.byteLength,
@@ -338,7 +325,7 @@ async function addEvidence(
   );
   const confirmed = await evidence.confirm(
     principal,
-    `confirm-${kind}`,
+    `confirm-${randomUUID()}`,
     workOrderId,
     created.intent.evidenceId,
     requiredExecutionVersion(created.workOrder),

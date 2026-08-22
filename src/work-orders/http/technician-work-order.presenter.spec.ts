@@ -40,7 +40,6 @@ describe('technician work order presenter', () => {
         evidence: [
           {
             id: 'evidence-id',
-            kind: 'PHOTO',
             fileName: 'foto.jpg',
             contentType: 'image/jpeg',
             sizeBytes: 1_024n,

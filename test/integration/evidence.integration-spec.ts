@@ -132,7 +132,6 @@ describe('Private evidence', () => {
       scheduled.id,
       {
         version: started.execution?.version ?? 0,
-        kind: 'PHOTO',
         fileName: 'inspection.jpg',
         contentType: 'image/jpeg',
         sizeBytes: content.byteLength,

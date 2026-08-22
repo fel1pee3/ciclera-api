@@ -58,7 +58,6 @@ export class EvidenceService {
     workOrderId: string,
     input: {
       version: number;
-      kind: 'PHOTO' | 'SIGNATURE';
       fileName: string;
       contentType: string;
       sizeBytes: number;
@@ -84,7 +83,6 @@ export class EvidenceService {
       workOrderId,
       expectedVersion: input.version,
       requestId,
-      kind: input.kind,
       objectKey,
       fileName: input.fileName.trim(),
       contentType,

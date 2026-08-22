@@ -30,7 +30,6 @@ export class PrismaEvidenceRepository implements EvidenceRepository {
           workOrderId: input.workOrderId,
           executionId: execution.id,
           createdByUserId: input.technicianId,
-          kind: input.kind,
           objectKey: input.objectKey,
           fileName: input.fileName,
           contentType: input.contentType,

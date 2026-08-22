@@ -218,24 +218,10 @@ describe('Work order execution draft', () => {
           workOrderId: scheduled.id,
           executionId,
           createdByUserId: technician.userId,
-          kind: 'PHOTO',
           status: 'AVAILABLE',
           objectKey: `${organizationId}/${scheduled.id}/${randomUUID()}`,
           fileName: 'photo.jpg',
           contentType: 'image/jpeg',
-          sizeBytes: 10,
-          confirmedAt: new Date(),
-        },
-        {
-          organizationId,
-          workOrderId: scheduled.id,
-          executionId,
-          createdByUserId: technician.userId,
-          kind: 'SIGNATURE',
-          status: 'AVAILABLE',
-          objectKey: `${organizationId}/${scheduled.id}/${randomUUID()}`,
-          fileName: 'signature.png',
-          contentType: 'image/png',
           sizeBytes: 10,
           confirmedAt: new Date(),
         },
@@ -291,13 +277,8 @@ describe('Work order execution draft', () => {
     });
     expect(queue.items.map((item) => item.id)).toContain(scheduled.id);
     const review = await reviewsService.find(owner, scheduled.id);
-    expect(review.execution.evidence.map((item) => item.kind).sort()).toEqual([
-      'PHOTO',
-      'SIGNATURE',
-    ]);
-    const photo = review.execution.evidence.find(
-      (item) => item.kind === 'PHOTO',
-    );
+    expect(review.execution.evidence).toHaveLength(1);
+    const [photo] = review.execution.evidence;
     if (!photo) throw new Error('Expected photo evidence.');
     const readUrl = await evidenceService.readUrlForManager(owner, photo.id);
     expect(readUrl.url).toContain(`reviews/evidence/${photo.id}/content`);
