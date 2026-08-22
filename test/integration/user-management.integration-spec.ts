@@ -119,34 +119,77 @@ describe('User management persistence', () => {
     ).rejects.toBeInstanceOf(ManagedUserNotFoundError);
   });
 
-  it('lets ADMIN manage other administrators while protecting OWNER and self', async () => {
+  it('lets ADMIN manage technicians while protecting OWNER, administrators, and self', async () => {
     await expect(
       users.find(context(adminA, 'req_admin_owner'), ownerA.userId),
     ).rejects.toBeInstanceOf(UserManagementForbiddenError);
 
-    const managedAdmin = await users.create(
-      context(adminA, 'req_admin_create_admin'),
-      {
-        name: 'Administrador gerenciável',
-        email: `admin-managed-${suffix}@example.test`,
+    await expect(
+      users.create(context(adminA, 'req_admin_create_admin'), {
+        name: 'Administrador protegido',
+        email: `admin-protected-${suffix}@example.test`,
         password: 'LocalOnly!2026',
         role: 'ADMIN',
-      },
+      }),
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
+
+    const protectedAdmin = await createFixtureUser(
+      prisma,
+      adminA.organizationId,
+      'ADMIN',
+      `admin-protected-existing-${suffix}`,
     );
     await expect(
-      users.update(context(adminA, 'req_admin_update_admin'), managedAdmin.id, {
-        name: 'Administrador atualizado',
-      }),
-    ).resolves.toMatchObject({ name: 'Administrador atualizado' });
+      users.update(
+        context(adminA, 'req_admin_update_admin'),
+        protectedAdmin.id,
+        {
+          name: 'Alteração proibida',
+        },
+      ),
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
     await expect(
       users.setStatus(
         context(adminA, 'req_admin_deactivate_admin'),
-        managedAdmin.id,
+        protectedAdmin.id,
+        'INACTIVE',
+      ),
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
+    await expect(
+      users.delete(
+        context(adminA, 'req_admin_delete_admin'),
+        protectedAdmin.id,
+      ),
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
+
+    const managedTechnician = await users.create(
+      context(adminA, 'req_admin_create_tech'),
+      {
+        name: 'Técnico permitido',
+        email: `admin-tech-${suffix}@example.test`,
+        password: 'LocalOnly!2026',
+        role: 'TECHNICIAN',
+      },
+    );
+    await expect(
+      users.update(
+        context(adminA, 'req_admin_update_tech'),
+        managedTechnician.id,
+        { name: 'Técnico atualizado' },
+      ),
+    ).resolves.toMatchObject({ name: 'Técnico atualizado' });
+    await expect(
+      users.setStatus(
+        context(adminA, 'req_admin_deactivate_tech'),
+        managedTechnician.id,
         'INACTIVE',
       ),
     ).resolves.toMatchObject({ status: 'INACTIVE' });
     await expect(
-      users.delete(context(adminA, 'req_admin_delete_admin'), managedAdmin.id),
+      users.delete(
+        context(adminA, 'req_admin_delete_tech'),
+        managedTechnician.id,
+      ),
     ).resolves.toMatchObject({ status: 'INACTIVE' });
 
     await expect(
@@ -176,15 +219,6 @@ describe('User management persistence', () => {
     await expect(
       users.delete(context(adminA, 'req_admin_delete_self'), adminA.userId),
     ).rejects.toBeInstanceOf(UserManagementForbiddenError);
-
-    await expect(
-      users.create(context(adminA, 'req_admin_create_tech'), {
-        name: 'Técnico permitido',
-        email: `admin-tech-${suffix}@example.test`,
-        password: 'LocalOnly!2026',
-        role: 'TECHNICIAN',
-      }),
-    ).resolves.toMatchObject({ role: 'TECHNICIAN' });
   });
 
   it('honors globally unique normalized e-mail addresses', async () => {

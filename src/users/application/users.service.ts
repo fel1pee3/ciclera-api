@@ -57,7 +57,10 @@ export class UsersService {
       ) {
         throw new UserManagementForbiddenError();
       }
-    } else {
+    } else if (
+      context.principal.role !== 'ADMIN' ||
+      context.principal.userId !== user.id
+    ) {
       this.requireCanManage(context.principal, user.role);
     }
     return user;
@@ -204,6 +207,9 @@ export class UsersService {
   ): void {
     this.requireManager(principal);
     if (targetRole === 'OWNER') {
+      throw new UserManagementForbiddenError();
+    }
+    if (principal.role === 'ADMIN' && targetRole !== 'TECHNICIAN') {
       throw new UserManagementForbiddenError();
     }
   }

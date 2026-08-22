@@ -55,12 +55,7 @@ describe('UsersService', () => {
     });
   });
 
-  it('allows ADMIN to create administrators and technicians but never owners', async () => {
-    repository.create.mockResolvedValue({
-      status: 'CREATED',
-      user: adminUser,
-    });
-
+  it('allows ADMIN to create technicians but not administrators or owners', async () => {
     await expect(
       service.create(adminContext, {
         name: 'Outro administrador',
@@ -68,7 +63,7 @@ describe('UsersService', () => {
         password: 'LocalOnly!2026',
         role: 'ADMIN',
       }),
-    ).resolves.toMatchObject({ role: 'ADMIN' });
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
     await expect(
       service.create(adminContext, {
         name: 'Outro proprietário',
@@ -77,6 +72,18 @@ describe('UsersService', () => {
         role: 'OWNER',
       }),
     ).rejects.toBeInstanceOf(UserManagementForbiddenError);
+    repository.create.mockResolvedValue({
+      status: 'CREATED',
+      user: technicianUser,
+    });
+    await expect(
+      service.create(adminContext, {
+        name: 'Novo técnico',
+        email: 'technician2@example.test',
+        password: 'LocalOnly!2026',
+        role: 'TECHNICIAN',
+      }),
+    ).resolves.toMatchObject({ role: 'TECHNICIAN' });
     expect(repository.create.mock.calls).toHaveLength(1);
   });
 
@@ -161,32 +168,20 @@ describe('UsersService', () => {
     expect(repository.update.mock.calls).toHaveLength(0);
   });
 
-  it('lets ADMIN manage another administrator but protects their own account', async () => {
+  it('protects other administrators while allowing ADMIN to edit their own access data', async () => {
     repository.findById.mockResolvedValue(adminUser);
-    repository.update.mockResolvedValue({
-      status: 'UPDATED',
-      user: { ...adminUser, name: 'Administrador atualizado' },
-    });
-    repository.setStatus.mockResolvedValue({
-      status: 'UPDATED',
-      user: { ...adminUser, status: 'INACTIVE' },
-    });
-    repository.deleteUser.mockResolvedValue({
-      status: 'DELETED',
-      user: { ...adminUser, status: 'INACTIVE' },
-    });
 
     await expect(
       service.update(adminContext, adminUser.id, {
-        name: 'Administrador atualizado',
+        name: 'Alteração proibida',
       }),
-    ).resolves.toMatchObject({ name: 'Administrador atualizado' });
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
     await expect(
       service.setStatus(adminContext, adminUser.id, 'INACTIVE'),
-    ).resolves.toMatchObject({ status: 'INACTIVE' });
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
     await expect(
       service.delete(adminContext, adminUser.id),
-    ).resolves.toMatchObject({ status: 'INACTIVE' });
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
 
     repository.findById.mockResolvedValue({
       ...adminUser,
@@ -216,6 +211,34 @@ describe('UsersService', () => {
     await expect(
       service.delete(adminContext, admin.userId),
     ).rejects.toBeInstanceOf(UserManagementForbiddenError);
+  });
+
+  it('lets ADMIN edit, deactivate, and delete technicians', async () => {
+    repository.findById.mockResolvedValue(technicianUser);
+    repository.update.mockResolvedValue({
+      status: 'UPDATED',
+      user: { ...technicianUser, name: 'Técnico atualizado' },
+    });
+    repository.setStatus.mockResolvedValue({
+      status: 'UPDATED',
+      user: { ...technicianUser, status: 'INACTIVE' },
+    });
+    repository.deleteUser.mockResolvedValue({
+      status: 'DELETED',
+      user: { ...technicianUser, status: 'INACTIVE' },
+    });
+
+    await expect(
+      service.update(adminContext, technicianUser.id, {
+        name: 'Técnico atualizado',
+      }),
+    ).resolves.toMatchObject({ name: 'Técnico atualizado' });
+    await expect(
+      service.setStatus(adminContext, technicianUser.id, 'INACTIVE'),
+    ).resolves.toMatchObject({ status: 'INACTIVE' });
+    await expect(
+      service.delete(adminContext, technicianUser.id),
+    ).resolves.toMatchObject({ status: 'INACTIVE' });
   });
 
   it('does not allow another owner account to be created', async () => {
