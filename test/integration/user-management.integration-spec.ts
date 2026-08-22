@@ -119,18 +119,62 @@ describe('User management persistence', () => {
     ).rejects.toBeInstanceOf(ManagedUserNotFoundError);
   });
 
-  it('enforces the explicit ADMIN policy', async () => {
+  it('lets ADMIN manage other administrators while protecting OWNER and self', async () => {
     await expect(
       users.find(context(adminA, 'req_admin_owner'), ownerA.userId),
     ).rejects.toBeInstanceOf(UserManagementForbiddenError);
 
-    await expect(
-      users.create(context(adminA, 'req_admin_create_admin'), {
-        name: 'Administrador proibido',
-        email: `admin-forbidden-${suffix}@example.test`,
+    const managedAdmin = await users.create(
+      context(adminA, 'req_admin_create_admin'),
+      {
+        name: 'Administrador gerenciável',
+        email: `admin-managed-${suffix}@example.test`,
         password: 'LocalOnly!2026',
         role: 'ADMIN',
+      },
+    );
+    await expect(
+      users.update(context(adminA, 'req_admin_update_admin'), managedAdmin.id, {
+        name: 'Administrador atualizado',
       }),
+    ).resolves.toMatchObject({ name: 'Administrador atualizado' });
+    await expect(
+      users.setStatus(
+        context(adminA, 'req_admin_deactivate_admin'),
+        managedAdmin.id,
+        'INACTIVE',
+      ),
+    ).resolves.toMatchObject({ status: 'INACTIVE' });
+    await expect(
+      users.delete(context(adminA, 'req_admin_delete_admin'), managedAdmin.id),
+    ).resolves.toMatchObject({ status: 'INACTIVE' });
+
+    await expect(
+      users.update(context(adminA, 'req_admin_update_self'), adminA.userId, {
+        name: 'Administrador com dados atualizados',
+        email: `admin-self-updated-${suffix}@example.test`,
+        password: 'SelfUpdated!2026',
+      }),
+    ).resolves.toMatchObject({
+      name: 'Administrador com dados atualizados',
+      role: 'ADMIN',
+    });
+    await expect(
+      users.update(
+        context(adminA, 'req_admin_change_own_role'),
+        adminA.userId,
+        { role: 'TECHNICIAN' },
+      ),
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
+    await expect(
+      users.setStatus(
+        context(adminA, 'req_admin_deactivate_self'),
+        adminA.userId,
+        'INACTIVE',
+      ),
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
+    await expect(
+      users.delete(context(adminA, 'req_admin_delete_self'), adminA.userId),
     ).rejects.toBeInstanceOf(UserManagementForbiddenError);
 
     await expect(

@@ -55,7 +55,12 @@ describe('UsersService', () => {
     });
   });
 
-  it('allows ADMIN to create only technicians', async () => {
+  it('allows ADMIN to create administrators and technicians but never owners', async () => {
+    repository.create.mockResolvedValue({
+      status: 'CREATED',
+      user: adminUser,
+    });
+
     await expect(
       service.create(adminContext, {
         name: 'Outro administrador',
@@ -63,8 +68,16 @@ describe('UsersService', () => {
         password: 'LocalOnly!2026',
         role: 'ADMIN',
       }),
+    ).resolves.toMatchObject({ role: 'ADMIN' });
+    await expect(
+      service.create(adminContext, {
+        name: 'Outro proprietário',
+        email: 'owner2@example.test',
+        password: 'LocalOnly!2026',
+        role: 'OWNER',
+      }),
     ).rejects.toBeInstanceOf(UserManagementForbiddenError);
-    expect(passwords.hash.mock.calls).toHaveLength(0);
+    expect(repository.create.mock.calls).toHaveLength(1);
   });
 
   it('never allows TECHNICIAN to manage users', async () => {
@@ -97,17 +110,112 @@ describe('UsersService', () => {
     );
   });
 
-  it('keeps the owner account immutable through user management', async () => {
+  it('lets the owner edit their own access data but protects role and status', async () => {
     repository.findById.mockResolvedValue(ownerUser);
+    repository.update.mockResolvedValue({
+      status: 'UPDATED',
+      user: { ...ownerUser, name: 'Nome atualizado' },
+    });
+
+    await expect(
+      service.update(ownerContext, owner.userId, {
+        name: 'Nome atualizado',
+        email: 'owner.updated@example.test',
+        password: 'NewLocal!2026',
+      }),
+    ).resolves.toMatchObject({ name: 'Nome atualizado', role: 'OWNER' });
+    expect(repository.update.mock.calls[0]?.[0]).toMatchObject({
+      userId: owner.userId,
+      name: 'Nome atualizado',
+      email: 'owner.updated@example.test',
+      passwordHash: 'argon2-test-hash',
+    });
+    expect(repository.update.mock.calls[0]?.[0]).not.toHaveProperty('role');
 
     await expect(
       service.setStatus(ownerContext, owner.userId, 'INACTIVE'),
     ).rejects.toBeInstanceOf(UserManagementForbiddenError);
     await expect(
-      service.update(ownerContext, owner.userId, { name: 'Outro nome' }),
+      service.update(ownerContext, owner.userId, { role: 'ADMIN' }),
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
+    await expect(
+      service.delete(ownerContext, owner.userId),
     ).rejects.toBeInstanceOf(UserManagementForbiddenError);
     expect(repository.setStatus.mock.calls).toHaveLength(0);
+    expect(repository.update.mock.calls).toHaveLength(1);
+    expect(repository.deleteUser.mock.calls).toHaveLength(0);
+  });
+
+  it('does not let another owner edit this owner account', async () => {
+    repository.findById.mockResolvedValue(ownerUser);
+    const anotherOwnerContext = {
+      principal: { ...owner, userId: '10000000-0000-4000-8000-000000000999' },
+      requestId: 'req_another_owner',
+    };
+
+    await expect(
+      service.update(anotherOwnerContext, owner.userId, {
+        name: 'Tentativa externa',
+      }),
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
     expect(repository.update.mock.calls).toHaveLength(0);
+  });
+
+  it('lets ADMIN manage another administrator but protects their own account', async () => {
+    repository.findById.mockResolvedValue(adminUser);
+    repository.update.mockResolvedValue({
+      status: 'UPDATED',
+      user: { ...adminUser, name: 'Administrador atualizado' },
+    });
+    repository.setStatus.mockResolvedValue({
+      status: 'UPDATED',
+      user: { ...adminUser, status: 'INACTIVE' },
+    });
+    repository.deleteUser.mockResolvedValue({
+      status: 'DELETED',
+      user: { ...adminUser, status: 'INACTIVE' },
+    });
+
+    await expect(
+      service.update(adminContext, adminUser.id, {
+        name: 'Administrador atualizado',
+      }),
+    ).resolves.toMatchObject({ name: 'Administrador atualizado' });
+    await expect(
+      service.setStatus(adminContext, adminUser.id, 'INACTIVE'),
+    ).resolves.toMatchObject({ status: 'INACTIVE' });
+    await expect(
+      service.delete(adminContext, adminUser.id),
+    ).resolves.toMatchObject({ status: 'INACTIVE' });
+
+    repository.findById.mockResolvedValue({
+      ...adminUser,
+      id: admin.userId,
+    });
+    repository.update.mockResolvedValue({
+      status: 'UPDATED',
+      user: {
+        ...adminUser,
+        id: admin.userId,
+        name: 'Dados próprios atualizados',
+      },
+    });
+    await expect(
+      service.update(adminContext, admin.userId, {
+        name: 'Dados próprios atualizados',
+        email: 'self.updated@example.test',
+        password: 'SelfUpdated!2026',
+      }),
+    ).resolves.toMatchObject({ name: 'Dados próprios atualizados' });
+    await expect(
+      service.update(adminContext, admin.userId, { role: 'TECHNICIAN' }),
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
+    await expect(
+      service.setStatus(adminContext, admin.userId, 'INACTIVE'),
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
+    await expect(
+      service.delete(adminContext, admin.userId),
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
   });
 
   it('does not allow another owner account to be created', async () => {
@@ -199,4 +307,11 @@ const technicianUser = {
   name: 'Técnico',
   email: 'technician@example.test',
   role: 'TECHNICIAN' as const,
+};
+const adminUser = {
+  ...ownerUser,
+  id: '10000000-0000-4000-8000-000000000103',
+  name: 'Administrador gerenciado',
+  email: 'managed.admin@example.test',
+  role: 'ADMIN' as const,
 };

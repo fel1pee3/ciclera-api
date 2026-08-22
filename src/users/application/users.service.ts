@@ -50,7 +50,16 @@ export class UsersService {
       userId,
     );
     if (!user) throw new ManagedUserNotFoundError();
-    this.requireCanManage(context.principal, user.role);
+    if (user.role === 'OWNER') {
+      if (
+        context.principal.role !== 'OWNER' ||
+        context.principal.userId !== user.id
+      ) {
+        throw new UserManagementForbiddenError();
+      }
+    } else {
+      this.requireCanManage(context.principal, user.role);
+    }
     return user;
   }
 
@@ -99,7 +108,19 @@ export class UsersService {
       throw new EmptyUserUpdateError();
     }
     const target = await this.find(context, userId);
-    if (input.role) this.requireCanManage(context.principal, input.role);
+    if (target.role === 'OWNER' && input.role !== undefined) {
+      throw new UserManagementForbiddenError();
+    }
+    if (
+      context.principal.role === 'ADMIN' &&
+      context.principal.userId === target.id &&
+      input.role !== undefined
+    ) {
+      throw new UserManagementForbiddenError();
+    }
+    if (target.role !== 'OWNER' && input.role) {
+      this.requireCanManage(context.principal, input.role);
+    }
     if (
       input.role &&
       target.status === 'ACTIVE' &&
@@ -129,6 +150,13 @@ export class UsersService {
 
   async setStatus(context: RequestContext, userId: string, status: UserStatus) {
     const target = await this.find(context, userId);
+    if (target.role === 'OWNER') throw new UserManagementForbiddenError();
+    if (
+      context.principal.role === 'ADMIN' &&
+      context.principal.userId === target.id
+    ) {
+      throw new UserManagementForbiddenError();
+    }
     if (target.status === 'INACTIVE' && status === 'ACTIVE') {
       await this.entitlements.assertUserSeat(
         context.principal.organizationId,
@@ -147,6 +175,13 @@ export class UsersService {
 
   async delete(context: RequestContext, userId: string) {
     const target = await this.find(context, userId);
+    if (target.role === 'OWNER') throw new UserManagementForbiddenError();
+    if (
+      context.principal.role === 'ADMIN' &&
+      context.principal.userId === target.id
+    ) {
+      throw new UserManagementForbiddenError();
+    }
     const result = await this.users.deleteUser({
       organizationId: context.principal.organizationId,
       actorUserId: context.principal.userId,
@@ -169,9 +204,6 @@ export class UsersService {
   ): void {
     this.requireManager(principal);
     if (targetRole === 'OWNER') {
-      throw new UserManagementForbiddenError();
-    }
-    if (principal.role === 'ADMIN' && targetRole !== 'TECHNICIAN') {
       throw new UserManagementForbiddenError();
     }
   }
