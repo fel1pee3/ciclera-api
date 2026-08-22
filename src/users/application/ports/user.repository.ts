@@ -33,6 +33,9 @@ export type UpdateUserResult =
   | { status: 'LAST_OWNER' }
   | { status: 'EMAIL_CONFLICT' };
 
+export type DeleteUserResult =
+  { status: 'DELETED'; user: ManagedUser } | { status: 'NOT_FOUND' };
+
 export interface UserRepository {
   list(input: ListUsersInput): Promise<PaginatedUsers>;
   findById(organizationId: string, userId: string): Promise<ManagedUser | null>;
@@ -64,4 +67,10 @@ export interface UserRepository {
       status: UserStatus;
     } & AuditContext,
   ): Promise<UpdateUserResult>;
+  deleteUser(
+    input: {
+      organizationId: string;
+      userId: string;
+    } & AuditContext,
+  ): Promise<DeleteUserResult>;
 }

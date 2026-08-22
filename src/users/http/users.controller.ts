@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Param,
@@ -123,6 +124,23 @@ export class UsersController {
     @Param('userId', new ParseUUIDPipe()) userId: string,
   ): Promise<UserResponseDto> {
     return this.users.setStatus(context(principal, request), userId, 'ACTIVE');
+  }
+
+  @Delete(':userId')
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({
+    summary: 'Exclui o acesso preservando os vínculos históricos.',
+  })
+  @ApiOkResponse({ type: UserResponseDto })
+  @ApiForbiddenResponse({
+    description: 'O proprietário não pode ser excluído.',
+  })
+  delete(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Req() request: RequestWithId,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+  ): Promise<UserResponseDto> {
+    return this.users.delete(context(principal, request), userId);
   }
 }
 

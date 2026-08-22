@@ -3,7 +3,6 @@ import type { AuthenticatedPrincipal } from '../../auth/domain/authenticated-pri
 import type { PaginatedUsers, UserRepository } from './ports/user.repository';
 import { UsersService } from './users.service';
 import {
-  LastOwnerRequiredError,
   UserEmailAlreadyInUseError,
   UserManagementForbiddenError,
 } from '../domain/user-management.errors';
@@ -22,6 +21,7 @@ describe('UsersService', () => {
       create: jest.fn(),
       update: jest.fn(),
       setStatus: jest.fn(),
+      deleteUser: jest.fn(),
     };
     passwords = {
       hash: jest.fn().mockResolvedValue('argon2-test-hash'),
@@ -97,23 +97,61 @@ describe('UsersService', () => {
     );
   });
 
-  it('surfaces the atomic last-owner protection', async () => {
+  it('keeps the owner account immutable through user management', async () => {
     repository.findById.mockResolvedValue(ownerUser);
-    repository.setStatus.mockResolvedValue({ status: 'LAST_OWNER' });
 
     await expect(
       service.setStatus(ownerContext, owner.userId, 'INACTIVE'),
-    ).rejects.toBeInstanceOf(LastOwnerRequiredError);
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
+    await expect(
+      service.update(ownerContext, owner.userId, { name: 'Outro nome' }),
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
+    expect(repository.setStatus.mock.calls).toHaveLength(0);
+    expect(repository.update.mock.calls).toHaveLength(0);
+  });
+
+  it('does not allow another owner account to be created', async () => {
+    await expect(
+      service.create(ownerContext, {
+        name: 'Outro proprietário',
+        email: 'other-owner@example.test',
+        password: 'LocalOnly!2026',
+        role: 'OWNER',
+      }),
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
+    expect(repository.create.mock.calls).toHaveLength(0);
+  });
+
+  it('deletes a non-owner account while preserving repository policy', async () => {
+    repository.findById.mockResolvedValue(technicianUser);
+    repository.deleteUser.mockResolvedValue({
+      status: 'DELETED',
+      user: {
+        ...technicianUser,
+        name: 'Usuário excluído',
+        email: `deleted.${technicianUser.id}@users.invalid`,
+        status: 'INACTIVE',
+      },
+    });
+
+    await expect(
+      service.delete(ownerContext, technicianUser.id),
+    ).resolves.toMatchObject({ status: 'INACTIVE' });
+    expect(repository.deleteUser.mock.calls[0]?.[0]).toMatchObject({
+      organizationId: owner.organizationId,
+      userId: technicianUser.id,
+      actorUserId: owner.userId,
+    });
   });
 
   it('normalizes e-mail and hashes a new password during updates', async () => {
-    repository.findById.mockResolvedValue(ownerUser);
+    repository.findById.mockResolvedValue(technicianUser);
     repository.update.mockResolvedValue({
       status: 'UPDATED',
-      user: { ...ownerUser, email: 'updated@example.test' },
+      user: { ...technicianUser, email: 'updated@example.test' },
     });
 
-    await service.update(ownerContext, owner.userId, {
+    await service.update(ownerContext, technicianUser.id, {
       email: ' Updated@Example.Test ',
       password: 'NewLocal!2026',
     });
@@ -122,7 +160,7 @@ describe('UsersService', () => {
     expect(repository.update.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         organizationId: owner.organizationId,
-        userId: owner.userId,
+        userId: technicianUser.id,
         email: 'updated@example.test',
         normalizedEmail: 'updated@example.test',
         passwordHash: 'argon2-test-hash',
@@ -154,4 +192,11 @@ const ownerUser = {
   status: 'ACTIVE' as const,
   createdAt: now,
   updatedAt: now,
+};
+const technicianUser = {
+  ...ownerUser,
+  id: '10000000-0000-4000-8000-000000000102',
+  name: 'Técnico',
+  email: 'technician@example.test',
+  role: 'TECHNICIAN' as const,
 };

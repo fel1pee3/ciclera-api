@@ -5,7 +5,6 @@ import type { AuthenticatedPrincipal } from '../../src/auth/domain/authenticated
 import { PrismaService } from '../../src/infrastructure/database/prisma/prisma.service';
 import { UsersService } from '../../src/users/application/users.service';
 import {
-  LastOwnerRequiredError,
   ManagedUserNotFoundError,
   UserEmailAlreadyInUseError,
   UserManagementForbiddenError,
@@ -92,6 +91,15 @@ describe('User management persistence', () => {
     });
     expect(page.items[0]).not.toHaveProperty('passwordHash');
 
+    const completePage = await users.list(
+      context(ownerA, 'req_list_owner_first'),
+      { page: 1, pageSize: 20 },
+    );
+    expect(completePage.items[0]).toMatchObject({
+      id: ownerA.userId,
+      role: 'OWNER',
+    });
+
     const audit = await prisma.auditLog.findFirstOrThrow({
       where: {
         organizationId: ownerA.organizationId,
@@ -154,19 +162,22 @@ describe('User management persistence', () => {
     ).rejects.toBeInstanceOf(UserEmailAlreadyInUseError);
   });
 
-  it('protects the last active OWNER atomically', async () => {
+  it('keeps the OWNER account immutable', async () => {
     await expect(
       users.setStatus(
         context(ownerB, 'req_last_owner'),
         ownerB.userId,
         'INACTIVE',
       ),
-    ).rejects.toBeInstanceOf(LastOwnerRequiredError);
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
     await expect(
       users.update(context(ownerB, 'req_last_owner_role'), ownerB.userId, {
         role: 'ADMIN',
       }),
-    ).rejects.toBeInstanceOf(LastOwnerRequiredError);
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
+    await expect(
+      users.delete(context(ownerB, 'req_delete_owner'), ownerB.userId),
+    ).rejects.toBeInstanceOf(UserManagementForbiddenError);
   });
 
   it('updates access data, revokes sessions, and audits sensitive changes', async () => {
@@ -233,6 +244,35 @@ describe('User management persistence', () => {
       'req_role_change',
       'req_status_change',
     ]);
+
+    await users.delete(context(ownerA, 'req_delete_user'), target.id);
+    const [deletedUser, visiblePage, deletionAudit] = await Promise.all([
+      prisma.user.findUniqueOrThrow({
+        where: { id: target.id },
+        select: { name: true, email: true, status: true, deletedAt: true },
+      }),
+      users.list(context(ownerA, 'req_list_after_delete'), {
+        page: 1,
+        pageSize: 100,
+      }),
+      prisma.auditLog.findFirstOrThrow({
+        where: {
+          organizationId: ownerA.organizationId,
+          resourceId: target.id,
+          action: 'USER_DELETED',
+        },
+      }),
+    ]);
+    expect(deletedUser).toMatchObject({
+      name: 'Usuário excluído',
+      status: 'INACTIVE',
+    });
+    expect(deletedUser.email).toBe(`deleted.${target.id}@users.invalid`);
+    expect(deletedUser.deletedAt).toBeInstanceOf(Date);
+    expect(visiblePage.items).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: target.id })]),
+    );
+    expect(deletionAudit.requestId).toBe('req_delete_user');
   });
 });
 

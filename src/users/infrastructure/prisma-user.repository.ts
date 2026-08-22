@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma/prisma.service';
 import type {
   CreateUserResult,
+  DeleteUserResult,
   ListUsersInput,
   PaginatedUsers,
   UpdateUserResult,
@@ -27,6 +28,7 @@ export class PrismaUserRepository implements UserRepository {
   async list(input: ListUsersInput): Promise<PaginatedUsers> {
     const where: Prisma.UserWhereInput = {
       organizationId: input.organizationId,
+      deletedAt: null,
       ...(input.role ? { role: input.role } : {}),
       ...(input.status ? { status: input.status } : {}),
       ...(input.search
@@ -42,7 +44,7 @@ export class PrismaUserRepository implements UserRepository {
       this.prisma.user.findMany({
         where,
         select: managedUserSelect,
-        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        orderBy: [{ role: 'asc' }, { name: 'asc' }, { id: 'asc' }],
         skip: (input.page - 1) * input.pageSize,
         take: input.pageSize,
       }),
@@ -55,8 +57,8 @@ export class PrismaUserRepository implements UserRepository {
     organizationId: string,
     userId: string,
   ): Promise<ManagedUser | null> {
-    return this.prisma.user.findUnique({
-      where: { organizationId_id: { organizationId, id: userId } },
+    return this.prisma.user.findFirst({
+      where: { organizationId, id: userId, deletedAt: null },
       select: managedUserSelect,
     });
   }
@@ -254,6 +256,65 @@ export class PrismaUserRepository implements UserRepository {
           { from: current.status, to: user.status },
         );
         return { status: 'UPDATED', user };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  deleteUser(
+    input: Parameters<UserRepository['deleteUser']>[0],
+  ): Promise<DeleteUserResult> {
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const current = await transaction.user.findFirst({
+          where: {
+            organizationId: input.organizationId,
+            id: input.userId,
+            deletedAt: null,
+          },
+          select: managedUserSelect,
+        });
+        if (!current) return { status: 'NOT_FOUND' };
+
+        const deletedEmail = `deleted.${current.id}@users.invalid`;
+        const user = await transaction.user.update({
+          where: {
+            organizationId_id: {
+              organizationId: input.organizationId,
+              id: input.userId,
+            },
+          },
+          data: {
+            name: 'Usuário excluído',
+            email: deletedEmail,
+            normalizedEmail: deletedEmail,
+            status: 'INACTIVE',
+            deletedAt: new Date(),
+          },
+          select: managedUserSelect,
+        });
+        await transaction.session.updateMany({
+          where: {
+            organizationId: input.organizationId,
+            userId: input.userId,
+            revokedAt: null,
+          },
+          data: {
+            revokedAt: new Date(),
+            revocationReason: 'USER_DELETED',
+          },
+        });
+        await transaction.passwordResetToken.deleteMany({
+          where: {
+            organizationId: input.organizationId,
+            userId: input.userId,
+          },
+        });
+        await writeAudit(transaction, input, current.id, 'USER_DELETED', {
+          role: current.role,
+          previousStatus: current.status,
+        });
+        return { status: 'DELETED', user };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );

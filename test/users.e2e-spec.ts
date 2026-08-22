@@ -236,6 +236,10 @@ class TestUserRepository implements UserRepository {
   setStatus(): Promise<UpdateUserResult> {
     return Promise.resolve({ status: 'NOT_FOUND' });
   }
+
+  deleteUser(): Promise<{ status: 'NOT_FOUND' }> {
+    return Promise.resolve({ status: 'NOT_FOUND' });
+  }
 }
 
 const session: ResolvedSession = {

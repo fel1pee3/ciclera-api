@@ -145,6 +145,18 @@ export class UsersService {
     return resolveUpdateResult(result, target);
   }
 
+  async delete(context: RequestContext, userId: string) {
+    const target = await this.find(context, userId);
+    const result = await this.users.deleteUser({
+      organizationId: context.principal.organizationId,
+      actorUserId: context.principal.userId,
+      requestId: context.requestId,
+      userId,
+    });
+    if (result.status === 'NOT_FOUND') throw new ManagedUserNotFoundError();
+    return result.status === 'DELETED' ? result.user : target;
+  }
+
   private requireManager(principal: AuthenticatedPrincipal): void {
     if (principal.role === 'TECHNICIAN') {
       throw new UserManagementForbiddenError();
@@ -156,6 +168,9 @@ export class UsersService {
     targetRole: UserRole,
   ): void {
     this.requireManager(principal);
+    if (targetRole === 'OWNER') {
+      throw new UserManagementForbiddenError();
+    }
     if (principal.role === 'ADMIN' && targetRole !== 'TECHNICIAN') {
       throw new UserManagementForbiddenError();
     }
