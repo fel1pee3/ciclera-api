@@ -33,7 +33,10 @@ describe('SubscriptionsService', () => {
         ownerName: 'Pessoa Proprietária',
         ownerEmail: 'owner@example.test',
       }),
-      createCheckout: jest.fn().mockResolvedValue({ id: checkoutId }),
+      createCheckout: jest.fn().mockResolvedValue({
+        id: checkoutId,
+        subscriptionId,
+      }),
       attachProviderCheckout: jest.fn(),
       schedulePlanChange: jest.fn(),
       cancelAtPeriodEnd: jest.fn(),
@@ -101,6 +104,65 @@ describe('SubscriptionsService', () => {
       organizationId,
       checkoutId,
       providerCheckoutId: 'checkout-provider-id',
+      providerCustomerId: undefined,
+      providerSubscriptionId: undefined,
+      paymentMethod: 'CREDIT_CARD',
+      nextDueDate: undefined,
+      initialPayment: undefined,
+    });
+  });
+
+  it('persists only provider references returned for a manual monthly Pix subscription', async () => {
+    const billingProfile = {
+      cpfCnpj: '12345678901',
+      mobilePhone: '5511999999999',
+      postalCode: '01310100',
+      address: 'Avenida Paulista',
+      addressNumber: '1578',
+      province: 'Bela Vista',
+    };
+    const dueDate = new Date('2026-08-21T00:00:00.000Z');
+    gateway.createHostedCheckout.mockResolvedValueOnce({
+      providerId: 'sub_pix_123',
+      providerCustomerId: 'cus_pix_123',
+      providerSubscriptionId: 'sub_pix_123',
+      url: 'https://www.asaas.com/i/pay_pix_123',
+      nextDueDate: dueDate,
+      initialPayment: {
+        providerPaymentId: 'pay_pix_123',
+        status: 'PENDING',
+        amountInCents: 19_900,
+        dueDate,
+        invoiceUrl: 'https://www.asaas.com/i/pay_pix_123',
+      },
+    });
+
+    await service.createCheckout(
+      owner,
+      'request-id',
+      'ESSENTIAL',
+      'PIX',
+      billingProfile,
+    );
+
+    expect(gateway.createHostedCheckout.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ billingProfile, paymentMethod: 'PIX' }),
+    );
+    expect(repository.attachProviderCheckout.mock.calls[0]?.[0]).toEqual({
+      organizationId,
+      checkoutId,
+      providerCheckoutId: 'sub_pix_123',
+      providerCustomerId: 'cus_pix_123',
+      providerSubscriptionId: 'sub_pix_123',
+      paymentMethod: 'PIX',
+      nextDueDate: dueDate,
+      initialPayment: {
+        providerPaymentId: 'pay_pix_123',
+        status: 'PENDING',
+        amountInCents: 19_900,
+        dueDate,
+        invoiceUrl: 'https://www.asaas.com/i/pay_pix_123',
+      },
     });
   });
 
@@ -168,6 +230,7 @@ describe('subscriptionAccess', () => {
 
 const organizationId = '11111111-1111-4111-8111-111111111111';
 const checkoutId = '22222222-2222-4222-8222-222222222222';
+const subscriptionId = '55555555-5555-4555-8555-555555555555';
 const webhookToken = 'local-webhook-token-with-more-than-32-characters';
 const owner: AuthenticatedPrincipal = {
   organizationId,
@@ -181,12 +244,13 @@ function subscription(
   overrides: Partial<SubscriptionRecord> = {},
 ): SubscriptionRecord {
   return {
-    id: '55555555-5555-4555-8555-555555555555',
+    id: subscriptionId,
     organizationId,
     planCode: null,
     scheduledPlanCode: null,
     status: 'PENDING',
     paymentMethod: null,
+    providerCustomerId: null,
     providerSubscriptionId: null,
     currentPeriodStart: null,
     currentPeriodEnd: null,

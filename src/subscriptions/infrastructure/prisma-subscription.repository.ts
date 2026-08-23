@@ -138,6 +138,16 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
         },
         data: { status: 'EXPIRED' },
       });
+      if (input.paymentMethod === 'PIX') {
+        await transaction.subscriptionCheckout.updateMany({
+          where: {
+            organizationId: input.organizationId,
+            status: 'PENDING',
+            paymentMethod: 'PIX',
+          },
+          data: { status: 'CANCELED', providerCheckoutId: null },
+        });
+      }
       const checkout = await transaction.subscriptionCheckout.create({
         data: {
           organizationId: input.organizationId,
@@ -146,7 +156,7 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
           paymentMethod: input.paymentMethod,
           expiresAt: input.expiresAt,
         },
-        select: { id: true },
+        select: { id: true, subscriptionId: true },
       });
       await transaction.auditLog.create({
         data: {
@@ -169,16 +179,60 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
   async attachProviderCheckout(
     input: Parameters<SubscriptionRepository['attachProviderCheckout']>[0],
   ) {
-    const updated = await this.prisma.subscriptionCheckout.updateMany({
-      where: {
-        id: input.checkoutId,
-        organizationId: input.organizationId,
-        status: 'PENDING',
-      },
-      data: { providerCheckoutId: input.providerCheckoutId },
+    await this.prisma.$transaction(async (transaction) => {
+      const checkout = await transaction.subscriptionCheckout.findFirst({
+        where: {
+          id: input.checkoutId,
+          organizationId: input.organizationId,
+          status: 'PENDING',
+        },
+        select: { subscriptionId: true },
+      });
+      if (!checkout) throw new Error('Subscription checkout disappeared.');
+
+      await transaction.subscriptionCheckout.update({
+        where: { id: input.checkoutId },
+        data: { providerCheckoutId: input.providerCheckoutId },
+      });
+
+      if (input.providerCustomerId || input.providerSubscriptionId) {
+        await transaction.organizationSubscription.update({
+          where: { id: checkout.subscriptionId },
+          data: {
+            providerCustomerId: input.providerCustomerId,
+            providerSubscriptionId: input.providerSubscriptionId,
+            paymentMethod: input.paymentMethod,
+            nextDueDate: input.nextDueDate,
+            version: { increment: 1 },
+          },
+        });
+      }
+
+      if (input.initialPayment && input.paymentMethod) {
+        await transaction.subscriptionPayment.upsert({
+          where: {
+            providerPaymentId: input.initialPayment.providerPaymentId,
+          },
+          create: {
+            organizationId: input.organizationId,
+            subscriptionId: checkout.subscriptionId,
+            providerPaymentId: input.initialPayment.providerPaymentId,
+            providerSubscriptionId: input.providerSubscriptionId,
+            status: input.initialPayment.status,
+            paymentMethod: input.paymentMethod,
+            amountInCents: input.initialPayment.amountInCents,
+            dueDate: input.initialPayment.dueDate,
+            invoiceUrl: input.initialPayment.invoiceUrl,
+          },
+          update: {
+            status: input.initialPayment.status,
+            amountInCents: input.initialPayment.amountInCents,
+            dueDate: input.initialPayment.dueDate,
+            invoiceUrl: input.initialPayment.invoiceUrl,
+          },
+        });
+      }
     });
-    if (updated.count !== 1)
-      throw new Error('Subscription checkout disappeared.');
   }
 
   async schedulePlanChange(
@@ -298,21 +352,38 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
             undefined;
           const providerSubscriptionId =
             event.subscription?.id ?? event.payment?.subscription ?? undefined;
-          const checkout =
+          let checkout =
             externalReference && isUuid(externalReference)
               ? await transaction.subscriptionCheckout.findUnique({
                   where: { id: externalReference },
                 })
               : null;
-          const subscription = checkout
+          let subscription = checkout
             ? await transaction.organizationSubscription.findUnique({
                 where: { id: checkout.subscriptionId },
               })
-            : providerSubscriptionId
-              ? await transaction.organizationSubscription.findUnique({
-                  where: { providerSubscriptionId },
-                })
-              : null;
+            : null;
+          if (!subscription && externalReference && isUuid(externalReference)) {
+            subscription =
+              await transaction.organizationSubscription.findUnique({
+                where: { id: externalReference },
+              });
+            if (subscription) {
+              checkout = await transaction.subscriptionCheckout.findFirst({
+                where: {
+                  subscriptionId: subscription.id,
+                  status: 'PENDING',
+                },
+                orderBy: { createdAt: 'desc' },
+              });
+            }
+          }
+          if (!subscription && providerSubscriptionId) {
+            subscription =
+              await transaction.organizationSubscription.findUnique({
+                where: { providerSubscriptionId },
+              });
+          }
 
           if (!subscription) {
             await transaction.subscriptionWebhookEvent.create({

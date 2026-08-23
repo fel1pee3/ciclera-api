@@ -14,6 +14,7 @@ export interface SubscriptionRecord {
   scheduledPlanCode: SubscriptionPlanCode | null;
   status: SubscriptionStatus;
   paymentMethod: SubscriptionPaymentMethod | null;
+  providerCustomerId: string | null;
   providerSubscriptionId: string | null;
   currentPeriodStart: Date | null;
   currentPeriodEnd: Date | null;
@@ -45,11 +46,22 @@ export interface SubscriptionRepository {
     expiresAt: Date;
     actorUserId: string;
     requestId: string;
-  }): Promise<{ id: string }>;
+  }): Promise<{ id: string; subscriptionId: string }>;
   attachProviderCheckout(input: {
     organizationId: string;
     checkoutId: string;
     providerCheckoutId: string;
+    providerCustomerId?: string;
+    providerSubscriptionId?: string;
+    paymentMethod?: SubscriptionPaymentMethod;
+    nextDueDate?: Date;
+    initialPayment?: {
+      providerPaymentId: string;
+      status: 'PENDING' | 'OVERDUE';
+      amountInCents: number;
+      dueDate: Date;
+      invoiceUrl: string;
+    };
   }): Promise<void>;
   schedulePlanChange(input: {
     organizationId: string;

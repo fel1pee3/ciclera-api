@@ -263,16 +263,16 @@ As variáveis da fundação HTTP, da infraestrutura PostgreSQL, do Prisma, da au
 
 ### Autenticação
 
-| Variável                       | Obrigatória | Finalidade                                                                                                            |
-| ------------------------------ | ----------: | --------------------------------------------------------------------------------------------------------------------- |
-| `JWT_ACCESS_SECRET`            |         Sim | Secret com pelo menos 32 caracteres para assinar access tokens HS256                                                  |
-| `JWT_ACCESS_ISSUER`            |         Sim | Emissor exato aceito no access token                                                                                  |
-| `JWT_ACCESS_AUDIENCE`          |         Sim | Audiência exata aceita no access token                                                                                |
-| `ACCESS_TOKEN_TTL`             |         Sim | Validade do access token em segundos, entre 60 e 3600                                                                 |
-| `REFRESH_TOKEN_TTL`            |         Sim | Validade da sessão renovável em segundos, entre uma hora e 90 dias                                                    |
-| `PASSWORD_RESET_TOKEN_TTL`     |         Não | Validade do token de redefinição em segundos, entre 5 minutos e 24 horas; padrão `1800`                               |
-| `PASSWORD_RESET_DELIVERY_MODE` |         Não | `local`, `disabled` ou `resend`; produção proíbe `local`                                                      |
-| `AUTH_COOKIE_SAME_SITE`        |         Não | `strict`, `lax` ou `none`; padrão `strict`; `none` é permitido somente com cookies Secure em produção                 |
+| Variável                       | Obrigatória | Finalidade                                                                                            |
+| ------------------------------ | ----------: | ----------------------------------------------------------------------------------------------------- |
+| `JWT_ACCESS_SECRET`            |         Sim | Secret com pelo menos 32 caracteres para assinar access tokens HS256                                  |
+| `JWT_ACCESS_ISSUER`            |         Sim | Emissor exato aceito no access token                                                                  |
+| `JWT_ACCESS_AUDIENCE`          |         Sim | Audiência exata aceita no access token                                                                |
+| `ACCESS_TOKEN_TTL`             |         Sim | Validade do access token em segundos, entre 60 e 3600                                                 |
+| `REFRESH_TOKEN_TTL`            |         Sim | Validade da sessão renovável em segundos, entre uma hora e 90 dias                                    |
+| `PASSWORD_RESET_TOKEN_TTL`     |         Não | Validade do token de redefinição em segundos, entre 5 minutos e 24 horas; padrão `1800`               |
+| `PASSWORD_RESET_DELIVERY_MODE` |         Não | `local`, `disabled` ou `resend`; produção proíbe `local`                                              |
+| `AUTH_COOKIE_SAME_SITE`        |         Não | `strict`, `lax` ou `none`; padrão `strict`; `none` é permitido somente com cookies Secure em produção |
 
 Os cookies são host-only e `HttpOnly`. `Secure` é derivado de
 `NODE_ENV=production`, sem uma variável que possa enfraquecê-lo acidentalmente.
@@ -309,8 +309,8 @@ distribuído estiver indisponível.
 
 ### E-mail
 
-| Variável                 |          Obrigatória | Finalidade              |
-| ------------------------ | -------------------: | ----------------------- |
+| Variável         |    Obrigatória | Finalidade                                                          |
+| ---------------- | -------------: | ------------------------------------------------------------------- |
 | `RESEND_API_KEY` | Ao usar Resend | Chave server-side criada no Resend; nunca exposta à web ou aos logs |
 | `EMAIL_FROM`     | Ao usar Resend | Remetente transacional de um domínio verificado no Resend           |
 
@@ -347,12 +347,12 @@ evolução de infraestrutura; não existe fila persistente neste checkpoint.
 
 ### Assinaturas SaaS e Asaas
 
-| Variável                           | Obrigatória                     | Finalidade                                                                            |
-| ---------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------- |
-| `SUBSCRIPTION_ENFORCEMENT_ENABLED` | Explícita em produção           | Ativa cobrança, limites e restrições de acesso                                        |
-| `ASAAS_API_URL`                    | Quando a cobrança estiver ativa | URL oficial do Sandbox ou da API de produção do Asaas                                 |
-| `ASAAS_API_KEY`                    | Quando a cobrança estiver ativa | Chave server-side; nunca enviada à web ou registrada em logs                          |
-| `ASAAS_WEBHOOK_TOKEN`              | Quando a cobrança estiver ativa | Segredo independente, de 32 a 255 caracteres, usado para autenticar o webhook         |
+| Variável                           | Obrigatória                     | Finalidade                                                                    |
+| ---------------------------------- | ------------------------------- | ----------------------------------------------------------------------------- |
+| `SUBSCRIPTION_ENFORCEMENT_ENABLED` | Explícita em produção           | Ativa cobrança, limites e restrições de acesso                                |
+| `ASAAS_API_URL`                    | Quando a cobrança estiver ativa | URL oficial do Sandbox ou da API de produção do Asaas                         |
+| `ASAAS_API_KEY`                    | Quando a cobrança estiver ativa | Chave server-side; nunca enviada à web ou registrada em logs                  |
+| `ASAAS_WEBHOOK_TOKEN`              | Quando a cobrança estiver ativa | Segredo independente, de 32 a 255 caracteres, usado para autenticar o webhook |
 
 O desenvolvimento local mantém `SUBSCRIPTION_ENFORCEMENT_ENABLED=false` por
 padrão. Para testar pagamentos, use somente o Sandbox do Asaas e substitua as
@@ -361,8 +361,12 @@ forma explícita e aceita somente `https://api.asaas.com/v3`.
 
 Os planos e preços são definidos exclusivamente no backend: Essencial por
 R$ 199/mês, Profissional por R$ 399/mês e Operação por R$ 699/mês. Não há
-período de teste. Cartão e Pix usam checkout hospedado; boleto usa link de
-pagamento recorrente hospedado. A Ciclera nunca coleta dados de cartão.
+período de teste. Cartão usa checkout recorrente hospedado e boleto usa link de
+pagamento recorrente hospedado. No Pix, a API cria uma assinatura mensal padrão
+no Asaas: uma nova cobrança é gerada a cada ciclo e o proprietário a paga
+manualmente. CPF/CNPJ, telefone e endereço são enviados ao Asaas somente para o
+cadastro do pagador e não são persistidos pela Ciclera. A Ciclera nunca coleta
+dados de cartão.
 
 Configure no Asaas um webhook para
 `https://api.seu-dominio.com.br/api/v1/webhooks/asaas`, usando exatamente o
@@ -1213,14 +1217,15 @@ POST /api/v1/webhooks/asaas
 ```
 
 A assinatura pertence à organização. Somente `OWNER` cria checkout, programa
-troca de plano ou cancela a renovação. `checkout` recebe somente plano e método
-de pagamento: preço, recorrência e URLs de retorno são definidos pela API. O
+troca de plano ou cancela a renovação. `checkout` recebe plano, método de
+pagamento e, somente para Pix, o perfil de cobrança validado. Preço, recorrência
+e URLs de retorno são definidos pela API. O
 webhook não exige sessão, mas exige o header `asaas-access-token` válido e possui
 idempotência pelo ID do evento.
 
-Uma cobrança vencida mantém acesso completo até o sétimo dia. Do oitavo ao
-décimo quinto dia, administradores ficam sem escrita e técnicos podem somente
-concluir atendimentos já iniciados. Depois disso, o tenant fica somente leitura.
+Uma cobrança vencida mantém acesso completo durante uma carência exata de 3
+dias. Após 72 horas do vencimento, o tenant fica bloqueado operacionalmente até
+a confirmação do pagamento.
 Cancelamento preserva os dados e o acesso até o fim do período pago. Trocas de
 plano entram no ciclo seguinte, sem pró-rata; redução é rejeitada quando usuários
 ativos ou evidências excedem a nova capacidade.

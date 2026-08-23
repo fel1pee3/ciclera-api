@@ -1,6 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
-import { getSubscriptionPlan } from '../domain/subscription-plan';
 import { SubscriptionCheckoutUnavailableError } from '../domain/subscription.errors';
+import { getSubscriptionPlan } from '../domain/subscription-plan';
 import { AsaasSubscriptionPaymentGateway } from './asaas-subscription-payment.gateway';
 
 describe('AsaasSubscriptionPaymentGateway', () => {
@@ -29,21 +29,15 @@ describe('AsaasSubscriptionPaymentGateway', () => {
 
   it('creates a recurring hosted checkout with server-owned price and safe callbacks', async () => {
     fetchMock.mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          id: 'checkout-id',
-          link: 'https://sandbox.asaas.com/checkoutSession/show/checkout-id',
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
+      jsonResponse({
+        id: 'checkout-id',
+        link: 'https://sandbox.asaas.com/checkoutSession/show/checkout-id',
+      }),
     );
 
     await expect(
       gateway.createHostedCheckout({
-        externalReference: 'internal-checkout-id',
-        organizationName: 'Empresa Teste',
-        ownerName: 'Pessoa Proprietária',
-        ownerEmail: 'owner@example.test',
+        ...checkoutInput,
         plan: getSubscriptionPlan('ESSENTIAL'),
         paymentMethod: 'CREDIT_CARD',
         expiresAt: new Date('2026-08-21T16:00:00.000Z'),
@@ -54,14 +48,11 @@ describe('AsaasSubscriptionPaymentGateway', () => {
     });
 
     const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
-    if (typeof request.body !== 'string') {
-      throw new Error('Expected a JSON request body.');
-    }
-    const body: unknown = JSON.parse(request.body);
+    const body: unknown = JSON.parse(request.body as string);
     expect(body).toMatchObject({
       billingTypes: ['CREDIT_CARD'],
       chargeTypes: ['RECURRENT'],
-      externalReference: 'internal-checkout-id',
+      externalReference: checkoutInput.externalReference,
       subscription: {
         cycle: 'MONTHLY',
         nextDueDate: '2026-08-21 12:00:00',
@@ -82,22 +73,168 @@ describe('AsaasSubscriptionPaymentGateway', () => {
 
   it('rejects a checkout URL outside an Asaas HTTPS host', async () => {
     fetchMock.mockResolvedValue(
-      new Response(
-        JSON.stringify({ id: 'checkout-id', link: 'https://evil.example/pay' }),
-        { status: 200 },
-      ),
+      jsonResponse({ id: 'checkout-id', link: 'https://evil.example/pay' }),
     );
 
     await expect(
       gateway.createHostedCheckout({
-        externalReference: 'internal-checkout-id',
-        organizationName: 'Empresa Teste',
-        ownerName: 'Pessoa Proprietária',
-        ownerEmail: 'owner@example.test',
+        ...checkoutInput,
         plan: getSubscriptionPlan('ESSENTIAL'),
-        paymentMethod: 'PIX',
+        paymentMethod: 'CREDIT_CARD',
         expiresAt: new Date('2026-08-21T16:00:00.000Z'),
       }),
     ).rejects.toBeInstanceOf(SubscriptionCheckoutUnavailableError);
   });
+
+  it('creates a monthly Pix subscription and returns its first manual payment', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ data: [] }))
+      .mockResolvedValueOnce(jsonResponse({ id: 'cus_123' }))
+      .mockResolvedValueOnce(jsonResponse({ data: [] }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 'sub_123',
+          customer: 'cus_123',
+          nextDueDate: '2026-08-21',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [
+            {
+              id: 'pay_123',
+              status: 'PENDING',
+              value: 199,
+              dueDate: '2026-08-21',
+              invoiceUrl: 'https://sandbox.asaas.com/i/pay_123',
+            },
+          ],
+        }),
+      );
+
+    await expect(
+      gateway.createHostedCheckout({
+        ...checkoutInput,
+        plan: getSubscriptionPlan('ESSENTIAL'),
+        paymentMethod: 'PIX',
+        expiresAt: new Date('2026-08-21T16:00:00.000Z'),
+        billingProfile: {
+          cpfCnpj: '12345678901',
+          mobilePhone: '5511999999999',
+          postalCode: '01310100',
+          address: 'Avenida Paulista',
+          addressNumber: '1578',
+          complement: 'Sala 12',
+          province: 'Bela Vista',
+        },
+      }),
+    ).resolves.toEqual({
+      providerId: 'sub_123',
+      url: 'https://sandbox.asaas.com/i/pay_123',
+      providerCustomerId: 'cus_123',
+      providerSubscriptionId: 'sub_123',
+      nextDueDate: new Date('2026-08-21T00:00:00.000Z'),
+      initialPayment: {
+        providerPaymentId: 'pay_123',
+        status: 'PENDING',
+        amountInCents: 19_900,
+        dueDate: new Date('2026-08-21T00:00:00.000Z'),
+        invoiceUrl: 'https://sandbox.asaas.com/i/pay_123',
+      },
+    });
+
+    const [, customerRequest] = fetchMock.mock.calls[1] as [
+      string,
+      RequestInit,
+    ];
+    expect(JSON.parse(customerRequest.body as string)).toMatchObject({
+      cpfCnpj: '12345678901',
+      mobilePhone: '11999999999',
+      externalReference: checkoutInput.organizationId,
+    });
+    const [, subscriptionRequest] = fetchMock.mock.calls[3] as [
+      string,
+      RequestInit,
+    ];
+    expect(JSON.parse(subscriptionRequest.body as string)).toMatchObject({
+      customer: 'cus_123',
+      billingType: 'PIX',
+      cycle: 'MONTHLY',
+      externalReference: checkoutInput.subscriptionId,
+      value: 199,
+    });
+  });
+
+  it('reuses the existing Pix customer and subscription without duplicating them', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 'sub_existing',
+          customer: 'cus_existing',
+          nextDueDate: '2026-08-21',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [
+            {
+              id: 'pay_existing',
+              status: 'PENDING',
+              value: 399,
+              dueDate: '2026-08-21',
+              invoiceUrl: 'https://www.asaas.com/i/pay_existing',
+            },
+          ],
+        }),
+      );
+
+    await gateway.createHostedCheckout({
+      ...checkoutInput,
+      providerCustomerId: 'cus_existing',
+      providerSubscriptionId: 'sub_existing',
+      plan: getSubscriptionPlan('PROFESSIONAL'),
+      paymentMethod: 'PIX',
+      expiresAt: new Date('2026-08-21T16:00:00.000Z'),
+      billingProfile: {
+        cpfCnpj: '12345678901',
+        mobilePhone: '5511999999999',
+        postalCode: '01310100',
+        address: 'Avenida Paulista',
+        addressNumber: '1578',
+        province: 'Bela Vista',
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [updateUrl, updateRequest] = fetchMock.mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    const [paymentsUrl] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(updateUrl).toBe(
+      'https://api-sandbox.asaas.com/v3/subscriptions/sub_existing',
+    );
+    expect(updateRequest).toMatchObject({ method: 'PUT' });
+    expect(paymentsUrl).toBe(
+      'https://api-sandbox.asaas.com/v3/subscriptions/sub_existing/payments',
+    );
+  });
 });
+
+const checkoutInput = {
+  externalReference: '22222222-2222-4222-8222-222222222222',
+  organizationId: '11111111-1111-4111-8111-111111111111',
+  subscriptionId: '33333333-3333-4333-8333-333333333333',
+  organizationName: 'Empresa Teste',
+  ownerName: 'Pessoa Proprietária',
+  ownerEmail: 'owner@example.test',
+  providerCustomerId: null,
+  providerSubscriptionId: null,
+};
+
+function jsonResponse(value: unknown) {
+  return new Response(JSON.stringify(value), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+}

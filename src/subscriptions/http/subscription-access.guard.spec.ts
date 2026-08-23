@@ -120,6 +120,7 @@ describe('SubscriptionAccessGuard', () => {
       scheduledPlanCode: null,
       status: 'PENDING',
       paymentMethod: null,
+      providerCustomerId: null,
       providerSubscriptionId: null,
       currentPeriodStart: null,
       currentPeriodEnd: null,

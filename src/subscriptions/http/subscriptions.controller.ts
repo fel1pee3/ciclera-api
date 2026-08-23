@@ -55,6 +55,7 @@ export class SubscriptionsController {
       getRequestId(request),
       input.planCode,
       input.paymentMethod,
+      input.billingProfile,
     );
   }
 

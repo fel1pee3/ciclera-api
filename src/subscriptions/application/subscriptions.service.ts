@@ -6,6 +6,7 @@ import {
   SUBSCRIPTION_PAYMENT_GATEWAY,
   type SubscriptionPaymentGateway,
   type SubscriptionPaymentMethod,
+  type PixBillingProfile,
 } from './ports/subscription-payment-gateway.port';
 import {
   SUBSCRIPTION_REPOSITORY,
@@ -63,6 +64,7 @@ export class SubscriptionsService {
     requestId: string,
     planCode: SubscriptionPlanCode,
     paymentMethod: SubscriptionPaymentMethod,
+    billingProfile?: PixBillingProfile,
   ) {
     this.requireOwner(principal);
     const current = await this.subscriptions.current(principal.organizationId);
@@ -83,7 +85,13 @@ export class SubscriptionsService {
     });
     const hosted = await this.payments.createHostedCheckout({
       externalReference: checkout.id,
+      organizationId: principal.organizationId,
+      subscriptionId: checkout.subscriptionId,
       ...identity,
+      providerCustomerId: current.providerCustomerId,
+      providerSubscriptionId:
+        current.paymentMethod === 'PIX' ? current.providerSubscriptionId : null,
+      billingProfile,
       plan: getSubscriptionPlan(planCode),
       paymentMethod,
       expiresAt,
@@ -92,6 +100,11 @@ export class SubscriptionsService {
       organizationId: principal.organizationId,
       checkoutId: checkout.id,
       providerCheckoutId: hosted.providerId,
+      providerCustomerId: hosted.providerCustomerId,
+      providerSubscriptionId: hosted.providerSubscriptionId,
+      paymentMethod,
+      nextDueDate: hosted.nextDueDate,
+      initialPayment: hosted.initialPayment,
     });
     return { checkoutUrl: hosted.url, expiresAt };
   }
@@ -185,6 +198,8 @@ function presentSubscription(
   const access = subscriptionAccess(subscription);
   return {
     ...subscription,
+    providerCustomerId: undefined,
+    providerSubscriptionId: undefined,
     enforcementEnabled,
     latestInvoiceUrl: mayViewBillingLink ? subscription.latestInvoiceUrl : null,
     access,

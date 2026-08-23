@@ -161,6 +161,48 @@ describe('Organization subscriptions', () => {
       ),
     ).resolves.toBe('IGNORED');
   });
+
+  it('processes later monthly Pix charges by the stable subscription reference', async () => {
+    const suffix = `${Date.now()}-${process.pid}`;
+    const organization = await createOrganization(
+      prisma,
+      `Monthly Pix ${suffix}`,
+    );
+    organizationIds.push(organization.organizationId);
+
+    const checkout = await subscriptions.createCheckout({
+      organizationId: organization.organizationId,
+      planCode: 'ESSENTIAL',
+      paymentMethod: 'PIX',
+      expiresAt: new Date(Date.now() + 60_000),
+      actorUserId: organization.ownerId,
+      requestId: 'subscription-monthly-pix',
+    });
+
+    await expect(
+      subscriptions.processWebhook(
+        paymentEvent({
+          id: 'evt_subscription_monthly_pix',
+          checkoutId: checkout.subscriptionId,
+          paymentId: 'pay_subscription_monthly_pix',
+          providerSubscriptionId: 'sub_subscription_monthly_pix',
+          value: 199,
+          status: 'RECEIVED',
+        }),
+      ),
+    ).resolves.toBe('PROCESSED');
+
+    await expect(
+      prisma.organizationSubscription.findUniqueOrThrow({
+        where: { organizationId: organization.organizationId },
+      }),
+    ).resolves.toMatchObject({
+      planCode: 'ESSENTIAL',
+      paymentMethod: 'PIX',
+      providerSubscriptionId: 'sub_subscription_monthly_pix',
+      status: 'ACTIVE',
+    });
+  });
 });
 
 function paymentEvent(input: {
