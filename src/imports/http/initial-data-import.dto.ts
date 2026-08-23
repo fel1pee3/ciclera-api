@@ -15,3 +15,11 @@ export class CommitInitialDataImportDto extends PreviewInitialDataImportDto {
   @Matches(/^[a-f0-9]{64}$/)
   checksum!: string;
 }
+
+export class CommitInitialDataWorkbookDto {
+  @ApiProperty({ pattern: '^[a-f0-9]{64}$' })
+  @IsString()
+  @Length(64, 64)
+  @Matches(/^[a-f0-9]{64}$/)
+  checksum!: string;
+}

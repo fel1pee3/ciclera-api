@@ -11,6 +11,10 @@ import {
   type ParsedInitialData,
 } from '../domain/initial-data-import';
 import {
+  createInitialDataWorkbook,
+  initialDataWorkbookToCsv,
+} from '../domain/initial-data-workbook';
+import {
   INITIAL_DATA_IMPORT_REPOSITORY,
   type InitialDataImportRepository,
 } from './ports/initial-data-import.repository';
@@ -27,9 +31,27 @@ export class InitialDataImportService {
     return initialDataTemplate;
   }
 
+  templateWorkbook(principal: AuthenticatedPrincipal) {
+    this.requireOwner(principal);
+    return createInitialDataWorkbook();
+  }
+
   async preview(principal: AuthenticatedPrincipal, content: string) {
     this.requireOwner(principal);
     const data = this.parse(content);
+    return this.previewData(principal, data);
+  }
+
+  async previewWorkbook(principal: AuthenticatedPrincipal, file: Buffer) {
+    this.requireOwner(principal);
+    const data = this.parse(await this.readWorkbook(file));
+    return this.previewData(principal, data);
+  }
+
+  private async previewData(
+    principal: AuthenticatedPrincipal,
+    data: ParsedInitialData,
+  ) {
     const conflicts = await this.imports.inspect(
       principal.organizationId,
       data,
@@ -45,7 +67,27 @@ export class InitialDataImportService {
   ) {
     this.requireOwner(principal);
     const data = this.parse(input.content);
-    if (data.checksum !== input.checksum) {
+    return this.commitData(principal, requestId, data, input.checksum);
+  }
+
+  async commitWorkbook(
+    principal: AuthenticatedPrincipal,
+    requestId: string,
+    file: Buffer,
+    checksum: string,
+  ) {
+    this.requireOwner(principal);
+    const data = this.parse(await this.readWorkbook(file));
+    return this.commitData(principal, requestId, data, checksum);
+  }
+
+  private async commitData(
+    principal: AuthenticatedPrincipal,
+    requestId: string,
+    data: ParsedInitialData,
+    checksum: string,
+  ) {
+    if (data.checksum !== checksum) {
       throw invalidImport(
         'O arquivo mudou depois da prévia. Gere uma nova prévia.',
       );
@@ -64,6 +106,28 @@ export class InitialDataImportService {
       throw invalidImport('Os dados mudaram depois da prévia.', data);
     }
     return result;
+  }
+
+  private async readWorkbook(file: Buffer) {
+    try {
+      return await initialDataWorkbookToCsv(file);
+    } catch (error: unknown) {
+      const messages: Record<string, string> = {
+        IMPORT_XLSX_SIZE_INVALID:
+          'A planilha Excel deve possuir entre 1 byte e 500 KB.',
+        IMPORT_XLSX_SHEET_INVALID:
+          'A aba "Dados para importar" não foi encontrada.',
+        IMPORT_XLSX_HEADERS_INVALID:
+          'Não altere os títulos das colunas da planilha oficial.',
+        IMPORT_XLSX_CELL_INVALID:
+          'A planilha não aceita fórmulas, links ou valores complexos.',
+        IMPORT_ROW_LIMIT_EXCEEDED: 'A planilha aceita no máximo 500 linhas.',
+      };
+      const code = error instanceof Error ? error.message : '';
+      throw invalidImport(
+        messages[code] ?? 'A planilha Excel informada é inválida.',
+      );
+    }
   }
 
   private parse(content: string) {
