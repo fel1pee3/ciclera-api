@@ -95,6 +95,40 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
     };
   }
 
+  async listPayments(
+    input: Parameters<SubscriptionRepository['listPayments']>[0],
+  ) {
+    const where = { organizationId: input.organizationId };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.subscriptionPayment.findMany({
+        where,
+        orderBy: [{ dueDate: 'desc' }, { id: 'desc' }],
+        skip: (input.page - 1) * input.pageSize,
+        take: input.pageSize,
+        select: {
+          id: true,
+          status: true,
+          paymentMethod: true,
+          amountInCents: true,
+          dueDate: true,
+          paidAt: true,
+          invoiceUrl: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.subscriptionPayment.count({ where }),
+    ]);
+    return {
+      items: items.map((payment) => ({
+        ...payment,
+        invoiceUrl: safeInvoiceUrl(payment.invoiceUrl),
+      })),
+      page: input.page,
+      pageSize: input.pageSize,
+      total,
+    };
+  }
+
   organizationCheckoutIdentity(organizationId: string) {
     return this.prisma.organization
       .findUnique({
@@ -436,10 +470,16 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
             const paidAt = parseDateTime(
               event.payment.paymentDate ?? event.payment.clientPaymentDate,
             );
+            const incomingInvoiceUrl = safeInvoiceUrl(
+              event.payment.invoiceUrl ?? event.payment.bankSlipUrl,
+            );
             const existingPayment =
               await transaction.subscriptionPayment.findUnique({
                 where: { providerPaymentId: event.payment.id },
-                select: { status: true, amountInCents: true },
+                select: {
+                  status: true,
+                  amountInCents: true,
+                },
               });
             const status = reconcilePaymentStatus(
               existingPayment?.status,
@@ -462,16 +502,12 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
                 amountInCents,
                 dueDate,
                 paidAt,
-                invoiceUrl: safeInvoiceUrl(
-                  event.payment.invoiceUrl ?? event.payment.bankSlipUrl,
-                ),
+                invoiceUrl: incomingInvoiceUrl,
               },
               update: {
                 status,
                 paidAt,
-                invoiceUrl: safeInvoiceUrl(
-                  event.payment.invoiceUrl ?? event.payment.bankSlipUrl,
-                ),
+                invoiceUrl: incomingInvoiceUrl ?? undefined,
               },
             });
 

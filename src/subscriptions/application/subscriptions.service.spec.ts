@@ -28,6 +28,12 @@ describe('SubscriptionsService', () => {
         administrativeUsers: 1,
         evidenceStorageBytes: 0n,
       }),
+      listPayments: jest.fn().mockResolvedValue({
+        items: [],
+        page: 1,
+        pageSize: 10,
+        total: 0,
+      }),
       organizationCheckoutIdentity: jest.fn().mockResolvedValue({
         organizationName: 'Empresa Teste',
         ownerName: 'Pessoa Proprietária',
@@ -80,6 +86,55 @@ describe('SubscriptionsService', () => {
     await expect(service.current(admin)).resolves.toMatchObject({
       latestInvoiceUrl: null,
     });
+  });
+
+  it('returns only tenant-scoped payment history to the owner', async () => {
+    repository.listPayments.mockResolvedValueOnce({
+      items: [
+        {
+          id: '66666666-6666-4666-8666-666666666666',
+          status: 'RECEIVED',
+          paymentMethod: 'PIX',
+          amountInCents: 19_900n,
+          dueDate: new Date('2026-08-21T00:00:00.000Z'),
+          paidAt: new Date('2026-08-21T14:00:00.000Z'),
+          invoiceUrl: 'https://www.asaas.com/i/payment-id',
+          createdAt: new Date('2026-08-21T12:00:00.000Z'),
+        },
+      ],
+      page: 1,
+      pageSize: 10,
+      total: 1,
+    });
+
+    await expect(
+      service.paymentHistory(owner, { page: 1, pageSize: 10 }),
+    ).resolves.toMatchObject({
+      items: [
+        {
+          status: 'RECEIVED',
+          amountInCents: '19900',
+          invoiceUrl: 'https://www.asaas.com/i/payment-id',
+        },
+      ],
+      total: 1,
+    });
+    expect(repository.listPayments.mock.calls).toEqual([
+      [
+        {
+          organizationId,
+          page: 1,
+          pageSize: 10,
+        },
+      ],
+    ]);
+  });
+
+  it('does not expose payment history to non-owners', async () => {
+    await expect(
+      service.paymentHistory(admin, { page: 1, pageSize: 10 }),
+    ).rejects.toBeInstanceOf(SubscriptionOwnerRequiredError);
+    expect(repository.listPayments.mock.calls).toHaveLength(0);
   });
 
   it('creates hosted checkout with the server-owned plan and price', async () => {

@@ -59,6 +59,25 @@ export class SubscriptionsService {
     );
   }
 
+  async paymentHistory(
+    principal: AuthenticatedPrincipal,
+    query: { page: number; pageSize: number },
+  ) {
+    this.requireOwner(principal);
+    const result = await this.subscriptions.listPayments({
+      organizationId: principal.organizationId,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    return {
+      ...result,
+      items: result.items.map((payment) => ({
+        ...payment,
+        amountInCents: payment.amountInCents.toString(),
+      })),
+    };
+  }
+
   async createCheckout(
     principal: AuthenticatedPrincipal,
     requestId: string,

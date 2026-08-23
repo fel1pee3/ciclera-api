@@ -94,6 +94,7 @@ describe('Organization subscriptions', () => {
           ...confirmedEvent.payment,
           status: 'RECEIVED',
           paymentDate: '2026-08-22',
+          invoiceUrl: undefined,
         },
       }),
     ).resolves.toBe('PROCESSED');
@@ -127,6 +128,29 @@ describe('Organization subscriptions', () => {
         where: { providerPaymentId: 'pay_subscription_a' },
       }),
     ).resolves.toBe(1);
+    await expect(
+      subscriptions.listPayments({
+        organizationId: first.organizationId,
+        page: 1,
+        pageSize: 10,
+      }),
+    ).resolves.toMatchObject({
+      items: [
+        {
+          status: 'RECEIVED',
+          amountInCents: 19_900n,
+          invoiceUrl: 'https://www.asaas.com/i/pay_subscription_a',
+        },
+      ],
+      total: 1,
+    });
+    await expect(
+      subscriptions.listPayments({
+        organizationId: second.organizationId,
+        page: 1,
+        pageSize: 10,
+      }),
+    ).resolves.toMatchObject({ items: [], total: 0 });
 
     await expect(
       subscriptions.processWebhook(

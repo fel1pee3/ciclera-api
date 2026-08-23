@@ -31,9 +31,41 @@ export interface SubscriptionUsage {
   evidenceStorageBytes: bigint;
 }
 
+export type SubscriptionPaymentStatus =
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'RECEIVED'
+  | 'OVERDUE'
+  | 'REFUNDED'
+  | 'CHARGEBACK'
+  | 'CANCELED';
+
+export interface SubscriptionPaymentRecord {
+  id: string;
+  status: SubscriptionPaymentStatus;
+  paymentMethod: SubscriptionPaymentMethod;
+  amountInCents: bigint;
+  dueDate: Date;
+  paidAt: Date | null;
+  invoiceUrl: string | null;
+  createdAt: Date;
+}
+
+export interface SubscriptionPaymentPage {
+  items: SubscriptionPaymentRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
 export interface SubscriptionRepository {
   current(organizationId: string): Promise<SubscriptionRecord>;
   usage(organizationId: string): Promise<SubscriptionUsage>;
+  listPayments(input: {
+    organizationId: string;
+    page: number;
+    pageSize: number;
+  }): Promise<SubscriptionPaymentPage>;
   organizationCheckoutIdentity(organizationId: string): Promise<{
     organizationName: string;
     ownerName: string;

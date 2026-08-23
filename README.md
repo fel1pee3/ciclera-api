@@ -1210,6 +1210,7 @@ sessões ainda ativas do usuário. O e-mail normalizado permanece globalmente ú
 ```text
 GET  /api/v1/subscriptions/plans
 GET  /api/v1/subscriptions/current
+GET  /api/v1/subscriptions/payments?page=1&pageSize=10
 POST /api/v1/subscriptions/checkout
 POST /api/v1/subscriptions/change-plan
 POST /api/v1/subscriptions/cancel
@@ -1222,6 +1223,10 @@ pagamento e, somente para Pix, o perfil de cobrança validado. Preço, recorrên
 e URLs de retorno são definidos pela API. O
 webhook não exige sessão, mas exige o header `asaas-access-token` válido e possui
 idempotência pelo ID do evento.
+
+O histórico paginado de pagamentos é exclusivo do `OWNER`, sempre filtrado pela
+organização autenticada. A resposta não expõe IDs do provedor e entrega somente
+links HTTPS reconhecidos do Asaas para consulta da cobrança ou comprovante.
 
 Uma cobrança vencida mantém acesso completo durante uma carência exata de 3
 dias. Após 72 horas do vencimento, o tenant fica bloqueado operacionalmente até

@@ -3,10 +3,13 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsDefined,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
+  Min,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
@@ -15,6 +18,21 @@ import {
   type SubscriptionPlanCode,
 } from '../domain/subscription-plan';
 import type { SubscriptionPaymentMethod } from '../application/ports/subscription-payment-gateway.port';
+
+export class SubscriptionPaymentsQueryDto {
+  @ApiPropertyOptional({ default: 1, minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @ApiPropertyOptional({ default: 10, minimum: 1, maximum: 50 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  pageSize = 10;
+}
 
 export class PixBillingProfileDto {
   @ApiProperty({ description: 'CPF ou CNPJ, somente dígitos' })

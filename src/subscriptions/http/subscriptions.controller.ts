@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -17,6 +18,7 @@ import { SubscriptionsService } from '../application/subscriptions.service';
 import {
   ChangeSubscriptionPlanDto,
   CreateSubscriptionCheckoutDto,
+  SubscriptionPaymentsQueryDto,
 } from './subscription.dto';
 import { SubscriptionExempt } from './subscription-exempt.decorator';
 
@@ -38,6 +40,17 @@ export class SubscriptionsController {
   })
   current(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
     return this.subscriptions.current(principal);
+  }
+
+  @Get('payments')
+  @ApiOperation({
+    summary: 'Lista o histórico de pagamentos da assinatura',
+  })
+  payments(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Query() query: SubscriptionPaymentsQueryDto,
+  ) {
+    return this.subscriptions.paymentHistory(principal, query);
   }
 
   @Post('checkout')
